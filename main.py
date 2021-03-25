@@ -128,9 +128,8 @@ async def josmtip(ctx):
 
 ### Elements ###
 @bot.command(name="elm")
-async def elm(ctx, elm_type: str, elm_id: str, extras: Union[str, Iterable] = []):
-    if isinstance(extras, str):
-        extras = extras.split(",")
+async def elm(ctx, elm_type: str, elm_id: str, extras: str = ""):
+    extras = extras.split(",")
 
     elm_type = elm_type.lower()
     if elm_type[0] in ELM_TYPES_FL:
@@ -146,6 +145,10 @@ async def elm(ctx, elm_type: str, elm_id: str, extras: Union[str, Iterable] = []
     except:
         return await ctx.reply("Incorrectly formatted element id.")
 
+    return await ctx.reply(embed=elm_embed(elm_type, elm_id, extras))
+
+
+def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json")
     elm = res.json()["elements"][0]
 
@@ -261,12 +264,13 @@ async def elm(ctx, elm_type: str, elm_id: str, extras: Union[str, Iterable] = []
             inline=False,
         )
 
-    return await ctx.send(embed=embed, reference=ctx.message)
+    return embed
 
 
 # Inline element linking
-THING_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation|changeset)\/\d+(?!\/|[^\W])"
-USER_INLINE_REGEX = r"(?<!\/|[^\W])(?:user)\/[\w\-_]+(?!\/|[^\W])"
+ELM_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation)\/\d+(?!\/|[^\W])"
+CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
+USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
 
 
 @bot.listen("on_message")
@@ -274,15 +278,34 @@ async def elm_inline(msg):
     if msg.author == bot.user:
         return
 
-    things = [thing.split("/") for thing in re.findall(THING_INLINE_REGEX, msg.clean_content)]
-    users = [thing.split("/") for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
+    # The reference code is because I only want to make the first message a reply, to make it look neat.
+    ref = msg
 
-    both = things + users
+    # Elements
+    elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
 
-    if len(both) != 0:
-        links = [f"{config['emoji'][item[0]]} <https://www.osm.org/{item[0]}/{item[1]}>" for item in both]
+    for elm_type, elm_id in elms:
+        await msg.channel.send(embed=elm_embed(elm_type, elm_id), reference=ref)
+        ref = None
 
-        return await msg.reply("\n".join(links))
+    # Changesets
+    changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
+
+    if len(changesets) != 0:
+        links = [
+            f"{config['emoji']['changeset']} <https://www.osm.org/changeset/{changeset_id}>"
+            for changeset_id in changesets
+        ]
+        await msg.channel.send("\n".join(links), reference=ref)
+        ref = None
+
+    # Users
+    users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
+
+    if len(users) != 0:
+        links = [f"{config['emoji']['user']} <https://www.osm.org/user/{username}>" for username in users]
+        await msg.channel.send("\n".join(links), reference=ref)
+        ref = None
 
 
 # Suggestions
@@ -330,7 +353,9 @@ async def set_suggestion_chanel(ctx):
 
     config["server_settings"][str(ctx.guild.id)]["suggestion_channel"] = ctx.channel.id
     save_config()
-    done_msg = await ctx.message.reply(f"Set suggestions channel to <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.")
+    done_msg = await ctx.message.reply(
+        f"Set suggestions channel to <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>."
+    )
     sleep(config["autodelete_delay"])
     await done_msg.delete()
     await ctx.message.delete()
