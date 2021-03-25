@@ -1,6 +1,6 @@
 {
     "ohno_file": "../ohno-OSM/ohno.md",
-    "josm_tips_file": "res/josm_tips.md",
+    "josm_tips_file": "../ohno-OSM/josm_tips.md",
     "power_role": 744276295399112766,
     "suggestion_channel": 823360811610144809,
     "prefix": "?",
