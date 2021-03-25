@@ -140,15 +140,11 @@ async def taginfo_command(ctx: SlashContext, tag: str):
             del tag[1]
 
     if len(tag) == 1:
-        return await ctx.reply(embed=taginfo_embed(tag[0]))
+        return await ctx.send(embed=taginfo_embed(tag[0]))
     elif len(tag) == 2:
-        return await ctx.reply(embed=taginfo_embed(tag[0], tag[1]))
+        return await ctx.send(embed=taginfo_embed(tag[0], tag[1]))
     else:
-        done_msg = await ctx.message.reply(f"Please provide a tag.")
-        sleep(config["autodelete_delay"])
-        await done_msg.delete()
-        await ctx.message.delete()
-        return
+        return await ctx.send(f"Please provide a tag.", hidden=True, delete_after=config["autodelete_delay"])
 
 
 def taginfo_embed(key: str, value: str | None = None):
@@ -238,9 +234,9 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
         # Verify it's just a number to prevent injection or arbritrary text
         elm_id = str(int(elm_id))
     except:
-        return await ctx.reply("Incorrectly formatted element id.")
+        return await ctx.send("Incorrectly formatted element id.", hidden=True, delete_after=config["autodelete_delay"])
 
-    return await ctx.reply(embed=elm_embed(elm_type, elm_id, extras))
+    return await ctx.send(embed=elm_embed(elm_type, elm_id, extras))
 
 
 def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
