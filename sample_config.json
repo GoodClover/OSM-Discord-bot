@@ -1,7 +1,6 @@
 {
     "ohno_file": "../ohno-OSM/ohno.md",
     "josm_tips_file": "../ohno-OSM/josm_tips.md",
-    "prefix": "?",
     "autodelete_delay": 4,
     "thumb_size": 512,
     "site_url": "https://www.openstreetmap.org/",

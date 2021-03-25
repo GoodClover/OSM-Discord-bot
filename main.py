@@ -10,11 +10,14 @@ from time import sleep
 from datetime import datetime
 from urllib.parse import quote, unquote
 import re
+import discord
 
 import requests
 from dotenv import load_dotenv
-from discord import Embed, AllowedMentions
-from discord.ext import commands
+from discord import Client, Embed, AllowedMentions
+from discord_slash import SlashCommand, SlashContext
+from discord_slash.utils.manage_commands import create_option
+from requests.api import delete
 
 
 ## SETUP ##
@@ -40,10 +43,12 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 
 def load_config():
-    global config
+    global config, guild_ids
     # LINK - config.json
     with open("config.json", "r", encoding="utf8") as file:
         config = json.loads(file.read())
+    # guild_ids = [int(x) for x in config["server_settings"].keys()]
+    guild_ids = [735922875931820033]
 
 
 def save_config():
@@ -61,8 +66,7 @@ with open(config["ohno_file"], "r", encoding="utf8") as file:
 with open(config["josm_tips_file"], "r", encoding="utf8") as file:
     josm_tips = [entry for entry in file.read().split("\n\n") if entry != ""]
 
-bot = commands.Bot(
-    command_prefix=config["prefix"],
+client = Client(
     allowed_mentions=AllowedMentions(
         # I also use checks elsewhere to prevent @ injection.
         everyone=False,
@@ -71,6 +75,7 @@ bot = commands.Bot(
         replied_user=False,
     ),
 )
+slash = SlashCommand(client, sync_commands=True)
 
 
 ## UTILS ##
@@ -99,40 +104,35 @@ def comma_every_three(text: str):
     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
 
 
-## BOT ##
+## CLIENT ##
 
 
-@bot.event
+@client.event
 async def on_ready():
-    print(f"{bot.user} is connected to the following guilds:\n")
-    print("\n - ".join([f"{guild.name}: {guild.id}" for guild in bot.guilds]))
-
-
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.errors.MissingRole):
-        await ctx.send("You do not have the correct role for this command.")
-    else:
-        raise error
+    print(f"{client.user} is connected to the following guilds:\n")
+    print("\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
 # Google Bad
-@bot.command(name="googlebad", help="Find your fate of using Google Maps.")
-async def googlebad_command(ctx):
+@slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)
+async def googlebad_command(ctx: SlashContext):
+    await ctx.respond()
     response = choice(ohnos).replace("...", "Whenever you mention Google Maps,")
     await ctx.send(response)
 
 
 # JOSM Tip
-@bot.command(name="josmtip", help="Get a JOSM tip.")
-async def josmtip_command(ctx):
+@slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)
+async def josmtip_command(ctx: SlashContext):
+    await ctx.respond()
     response = choice(josm_tips)
     await ctx.send(response)
 
 
 ### TagInfo ###
-@bot.command(name="taginfo", help="Show taginfo for a tag.")
-async def taginfo_command(ctx, tag: str):
+@slash.slash(name="taginfo", description="Show taginfo for a tag.", guild_ids=guild_ids)
+async def taginfo_command(ctx: SlashContext, tag: str):
+    await ctx.respond()
     tag = tag.replace("`", "").split("=", 1)
 
     if len(tag) == 2:
@@ -221,8 +221,9 @@ def taginfo_embed(key: str, value: str | None = None):
 
 
 ### Elements ###
-@bot.command(name="elm")
-async def elm_command(ctx, elm_type: str, elm_id: str, extras: str = ""):
+@slash.slash(name="elm", description="Show details about an element.", guild_ids=guild_ids)
+async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = ""):
+    await ctx.respond()
     extras = extras.split(",")
 
     elm_type = elm_type.lower()
@@ -367,9 +368,9 @@ CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
 USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
 
 
-@bot.listen("on_message")
-async def elm_inline_listner(msg):
-    if msg.author == bot.user:
+@client.event
+async def on_message(msg):
+    if msg.author == client.user:
         return
 
     # The reference code is because I only want to make the first message a reply, to make it look neat.
@@ -403,59 +404,42 @@ async def elm_inline_listner(msg):
 
 
 # Suggestions
-@bot.command(name="suggest", help="Set the channel that suggestions are posted in.")
-async def suggest_command(ctx):
+@slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)
+async def suggest_command(ctx: SlashContext, suggestion: str):
+    await ctx.respond()
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
-        done_msg = await ctx.message.reply(f"Suggestions are not enabled on this server.")
-        sleep(config["autodelete_delay"])
-        await done_msg.delete()
-        await ctx.message.delete()
+        await ctx.send(
+            f"Suggestions are not enabled on this server.",
+            hidden=True,
+            delete_after=config["autodelete_delay"],
+        )
         return
 
-    suggestion_chanel = bot.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
+    suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
-    sugg_content = ctx.message.clean_content.split(" ", 1)[1].replace(NL, NL + "> ").replace("@", "�")
+    suggestion = suggestion.replace(NL, NL + "> ").replace("@", "�")
 
     sugg_msg = await suggestion_chanel.send(
         f"""
 __**New suggestion posted**__
 By: <@!{ctx.author.id}>
-> {sugg_content}
+> {suggestion}
 
 Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {config['emoji']['vote_no']}.
 """
     )
-    done_msg = await ctx.message.reply(
-        f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.\nhttps://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}"
+    done_msg = await ctx.send(
+        f"""Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.
+https://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}""",
+        hidden=True,
+        delete_after=config["autodelete_delay"],
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
     await sugg_msg.add_reaction(config["emoji"]["vote_abstain"])
     await sugg_msg.add_reaction(config["emoji"]["vote_no"])
-    sleep(config["autodelete_delay"])
-    await done_msg.delete()
-    await ctx.message.delete()
-
-
-@bot.command(name="set_suggestion_channel", help="[+] Set the channel that suggestions are posted in.")
-async def set_suggestion_chanel_command(ctx):
-    if not config["server_settings"][str(ctx.guild.id)]["power_role"] in [role.id for role in ctx.author.roles]:
-        done_msg = await ctx.message.reply(f"You do not have permission to run this command.")
-        sleep(config["autodelete_delay"])
-        await done_msg.delete()
-        await ctx.message.delete()
-        return
-
-    config["server_settings"][str(ctx.guild.id)]["suggestion_channel"] = ctx.channel.id
-    save_config()
-    done_msg = await ctx.message.reply(
-        f"Set suggestions channel to <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>."
-    )
-    sleep(config["autodelete_delay"])
-    await done_msg.delete()
-    await ctx.message.delete()
 
 
 ## MAIN ##
 
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    client.run(TOKEN)
