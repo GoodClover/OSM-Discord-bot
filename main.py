@@ -95,6 +95,10 @@ def get_languaged_tag(
         return None, None
 
 
+def comma_every_three(text: str):
+    return ",".join(re.findall("...", str(text)[::-1]))[::-1]
+
+
 ## BOT ##
 
 
@@ -114,21 +118,111 @@ async def on_command_error(ctx, error):
 
 # Google Bad
 @bot.command(name="googlebad", help="Find your fate of using Google Maps.")
-async def googlebad(ctx):
+async def googlebad_command(ctx):
     response = choice(ohnos).replace("...", "Whenever you mention Google Maps,")
     await ctx.send(response)
 
 
 # JOSM Tip
 @bot.command(name="josmtip", help="Get a JOSM tip.")
-async def josmtip(ctx):
+async def josmtip_command(ctx):
     response = choice(josm_tips)
     await ctx.send(response)
 
 
+### TagInfo ###
+@bot.command(name="taginfo", help="Show taginfo for a tag.")
+async def taginfo_command(ctx, tag: str):
+    tag = tag.replace("`", "").split("=", 1)
+
+    if len(tag) == 2:
+        if tag[1] == "*" or "":
+            del tag[1]
+
+    if len(tag) == 1:
+        return await ctx.reply(embed=taginfo_embed(tag[0]))
+    elif len(tag) == 2:
+        return await ctx.reply(embed=taginfo_embed(tag[0], tag[1]))
+    else:
+        done_msg = await ctx.message.reply(f"Please provide a tag.")
+        sleep(config["autodelete_delay"])
+        await done_msg.delete()
+        await ctx.message.delete()
+        return
+
+
+def taginfo_embed(key: str, value: str | None = None):
+    if value:
+        data = requests.get(config["taginfo_url"] + f"api/4/tag/stats?key={quote(key)}&value={quote(value)}").json()
+        data_wiki = requests.get(
+            config["taginfo_url"] + f"api/4/tag/wiki_pages?key={quote(key)}&value={quote(value)}"
+        ).json()
+    else:
+        data = requests.get(config["taginfo_url"] + f"api/4/key/stats?key={quote(key)}").json()
+        data_wiki = requests.get(config["taginfo_url"] + f"api/4/key/wiki_pages?key={quote(key)}").json()
+
+    data_wiki_en = [lang for lang in data_wiki["data"] if lang["lang"] == "en"][0]
+
+    #### Embed ####
+    embed = Embed()
+    embed.type = "rich"
+
+    embed.title = key
+    if value:
+        embed.title += "=" + value
+
+    if value:
+        embed.url = config["taginfo_url"] + "tags/" + quote(key) + "=" + quote(value)
+    else:
+        embed.url = config["taginfo_url"] + "keys/" + quote(key)
+
+    embed.set_footer(
+        text=config["taginfo_copyright_notice"],
+        icon_url=config["taginfo_icon_url"],
+    )
+
+    if data_wiki_en["image"]["image_url"]:
+        embed.set_thumbnail(
+            url=data_wiki_en["image"]["thumb_url_prefix"]
+            + str(config["thumb_size"])
+            + data_wiki_en["image"]["thumb_url_suffix"]
+        )
+    else:
+        embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
+
+    # embed.timestamp = datetime.now()
+    # This is the last time taginfo updated:
+    embed.timestamp = str_to_date(data["data_until"])
+
+    embed.set_author(name="taginfo", url=config["taginfo_url"] + "about")
+
+    embed.description = data_wiki_en["description"]
+
+    #### Fields ####
+    d = data["data"][0]
+    embed.add_field(
+        # This gets the emoji. Removes "s" from the end if it is there to do this.
+        name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
+        value=f"{comma_every_three(d['count'])} - {d['count_fraction']*100}%"
+        + (f"\n{comma_every_three(d['values'])} values" if not value else ""),
+        inline=False,
+    )
+    del data["data"][0]
+    for d in data["data"]:
+        embed.add_field(
+            # This gets the emoji. Removes "s" from the end if it is there to do this.
+            name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
+            value=f"{comma_every_three(d['count'])} - {d['count_fraction']*100}%"
+            + (f"\n{comma_every_three(d['values'])} values" if not value else ""),
+            inline=True,
+        )
+
+    return embed
+
+
 ### Elements ###
 @bot.command(name="elm")
-async def elm(ctx, elm_type: str, elm_id: str, extras: str = ""):
+async def elm_command(ctx, elm_type: str, elm_id: str, extras: str = ""):
     extras = extras.split(",")
 
     elm_type = elm_type.lower()
@@ -274,7 +368,7 @@ USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
 
 
 @bot.listen("on_message")
-async def elm_inline(msg):
+async def elm_inline_listner(msg):
     if msg.author == bot.user:
         return
 
@@ -310,7 +404,7 @@ async def elm_inline(msg):
 
 # Suggestions
 @bot.command(name="suggest", help="Set the channel that suggestions are posted in.")
-async def suggest(ctx):
+async def suggest_command(ctx):
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         done_msg = await ctx.message.reply(f"Suggestions are not enabled on this server.")
         sleep(config["autodelete_delay"])
@@ -343,7 +437,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 
 
 @bot.command(name="set_suggestion_channel", help="[+] Set the channel that suggestions are posted in.")
-async def set_suggestion_chanel(ctx):
+async def set_suggestion_chanel_command(ctx):
     if not config["server_settings"][str(ctx.guild.id)]["power_role"] in [role.id for role in ctx.author.roles]:
         done_msg = await ctx.message.reply(f"You do not have permission to run this command.")
         sleep(config["autodelete_delay"])
