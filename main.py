@@ -42,23 +42,23 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 def load_config():
     global config
     # LINK - config.json
-    with open("config.json", "r") as file:
+    with open("config.json", "r", encoding="utf8") as file:
         config = json.loads(file.read())
 
 
 def save_config():
     global config
     # LINK - config.json
-    with open("config.json", "w") as file:
+    with open("config.json", "w", encoding="utf8") as file:
         file.write(json.dumps(config, indent=4))
 
 
 load_config()
 
-with open(config["ohno_file"], "r") as file:
+with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
 
-with open(config["josm_tips_file"], "r") as file:
+with open(config["josm_tips_file"], "r", encoding="utf8") as file:
     josm_tips = [entry for entry in file.read().split("\n\n") if entry != ""]
 
 bot = commands.Bot(
@@ -288,7 +288,7 @@ async def elm_inline(msg):
 # Suggestions
 @bot.command(name="suggest", help="Set the channel that suggestions are posted in.")
 async def suggest(ctx):
-    suggestion_chanel = bot.get_channel(config["suggestion_channel"])
+    suggestion_chanel = bot.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
     sugg_content = ctx.message.clean_content.split(" ", 1)[1].replace(NL, NL + "> ").replace("@", "�")
 
@@ -313,11 +313,16 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 
 
 @bot.command(name="set_suggestion_channel", help="Set the channel that suggestions are posted in.")
-@commands.has_role(config["power_role"])
 async def set_suggestion_chanel(ctx):
-    config["suggestion_channel"] = ctx.channel.id
+    if not config["server_settings"][str(ctx.guild.id)]["power_role"] in [role.id for role in ctx.author.roles]:
+        done_msg = await ctx.message.reply(f"You do not have permission to run this command.")
+        sleep(config["autodelete_delay"])
+        await done_msg.delete()
+        await ctx.message.delete()
+
+    config["server_settings"][str(ctx.guild.id)]["suggestion_channel"] = ctx.channel.id
     save_config()
-    done_msg = await ctx.message.reply(f"Set suggestions channel to <#{config['suggestion_channel']}>.")
+    done_msg = await ctx.message.reply(f"Set suggestions channel to <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.")
     sleep(config["autodelete_delay"])
     await done_msg.delete()
     await ctx.message.delete()
