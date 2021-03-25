@@ -288,6 +288,13 @@ async def elm_inline(msg):
 # Suggestions
 @bot.command(name="suggest", help="Set the channel that suggestions are posted in.")
 async def suggest(ctx):
+    if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
+        done_msg = await ctx.message.reply(f"Suggestions are not enabled on this server.")
+        sleep(config["autodelete_delay"])
+        await done_msg.delete()
+        await ctx.message.delete()
+        return
+
     suggestion_chanel = bot.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
     sugg_content = ctx.message.clean_content.split(" ", 1)[1].replace(NL, NL + "> ").replace("@", "�")
@@ -302,7 +309,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 """
     )
     done_msg = await ctx.message.reply(
-        f"Sent suggestion in <#{config['suggestion_channel']}>.\nhttps://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}"
+        f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.\nhttps://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}"
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
     await sugg_msg.add_reaction(config["emoji"]["vote_abstain"])
@@ -312,13 +319,14 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     await ctx.message.delete()
 
 
-@bot.command(name="set_suggestion_channel", help="Set the channel that suggestions are posted in.")
+@bot.command(name="set_suggestion_channel", help="[+] Set the channel that suggestions are posted in.")
 async def set_suggestion_chanel(ctx):
     if not config["server_settings"][str(ctx.guild.id)]["power_role"] in [role.id for role in ctx.author.roles]:
         done_msg = await ctx.message.reply(f"You do not have permission to run this command.")
         sleep(config["autodelete_delay"])
         await done_msg.delete()
         await ctx.message.delete()
+        return
 
     config["server_settings"][str(ctx.guild.id)]["suggestion_channel"] = ctx.channel.id
     save_config()

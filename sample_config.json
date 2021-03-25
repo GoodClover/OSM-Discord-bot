@@ -35,7 +35,8 @@
     "server_settings": {
         "413070382636072960": {
             "suggestion_channel": 821120147522584576,
-            "power_role": 748826231692066850
+            "power_role": 748826231692066850,
+            "suggestions_enabled": false
         }
     }
 }
