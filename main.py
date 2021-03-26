@@ -89,10 +89,8 @@ def get_languaged_tag(
     tags: dict[str, str],
     tag: str,
     suffix: str = ":en",
-    *,
-    pop: bool = False,
 ) -> tuple[str, str] | None:
-    if k := (tag + suffix) in tags:
+    if (k := (tag + suffix)) in tags:
         return k, tags[k]
     elif tag in tags:
         return tag, tags[tag]
@@ -261,14 +259,19 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
 
     # embed.set_author(name=elm["user"], url=config["site_url"] + "user/" + elm["user"])
 
-    embed.title = elm_type.capitalize()
+    embed.title = elm_type.capitalize() + ": "
     key, name = get_languaged_tag(elm["tags"], "name")
     if key:
-        embed.title += ": " + name
+        embed.title += name
+    else:
+        embed.title += elm_id
 
-    embed.description = (
-        f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
-        "\n"
+    if elm_type == "node":
+        embed.description = f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
+    else:
+        embed.description = ""
+
+    embed.description += (
         f"[Edit](<https://www.osm.org/edit?{elm_type}={elm_id}>)"
         " • "
         f"[Level0](<http://level0.osmz.ru/?url={elm_type}/{elm_id}>)"
