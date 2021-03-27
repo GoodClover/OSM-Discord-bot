@@ -14,6 +14,7 @@ import requests
 from dotenv import load_dotenv
 from discord import Message, Client, Embed, AllowedMentions
 from discord_slash import SlashCommand, SlashContext
+from discord_slash.utils.manage_commands import create_choice, create_option
 
 
 ## SETUP ##
@@ -122,7 +123,19 @@ async def josmtip_command(ctx: SlashContext) -> None:
 
 
 ### TagInfo ###
-@slash.slash(name="taginfo", description="Show taginfo for a tag.", guild_ids=guild_ids)  # type: ignore
+@slash.slash(
+    name="taginfo",
+    description="Show taginfo for a tag.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="tag",
+            description="The tag or key.\ne.g. `highway=road` or `building=*`",
+            option_type=3,
+            required=True,
+        )
+    ],
+)  # type: ignore
 async def taginfo_command(ctx: SlashContext, tag: str) -> None:
     split_tag = tag.replace("`", "").split("=", 1)
 
@@ -210,7 +223,36 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
 
 
 ### Elements ###
-@slash.slash(name="elm", description="Show details about an element.", guild_ids=guild_ids)  # type: ignore
+@slash.slash(
+    name="elm",
+    description="Show details about an element.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="type",
+            description="The element's type",
+            option_type=3,
+            required=True,
+            choices=[
+                create_choice(name="node", value="node"),
+                create_choice(name="way", value="way"),
+                create_choice(name="relation", value="relation"),
+            ],
+        ),
+        create_option(
+            name="ID",
+            description="ID of the element",
+            option_type=4,
+            required=True,
+        ),
+        create_option(
+            name="extras",
+            description="Comma seperated list of extras from `info`, `tags`.",
+            option_type=3,
+            required=False,
+        ),
+    ],
+)  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
     elm_type = elm_type.lower()
     if elm_type[0] in ELM_TYPES_FL:
@@ -227,7 +269,8 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
         return
 
     await ctx.defer()
-    await ctx.send(embed=elm_embed(elm_type, elm_id, extras.split(",")))
+    extras_list = [e.strip() for e in extras.lower().split(",")]
+    await ctx.send(embed=elm_embed(elm_type, elm_id, extras_list))
 
 
 def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
