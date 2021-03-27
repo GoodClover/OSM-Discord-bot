@@ -1,23 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable
 
 ## IMPORTS ##
 import os
-from random import choice
+import random
 import json
-from time import sleep
 from datetime import datetime
 from urllib.parse import quote, unquote
 import re
-import discord
 
 import requests
 from dotenv import load_dotenv
-from discord import Client, Embed, AllowedMentions
+from discord import Message, Client, Embed, AllowedMentions
 from discord_slash import SlashCommand, SlashContext
-from discord_slash.utils.manage_commands import create_option
-from requests.api import delete
 
 
 ## SETUP ##
@@ -42,22 +38,24 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 
-def load_config():
+def load_config() -> None:
     global config, guild_ids
     # LINK - config.json
     with open("config.json", "r", encoding="utf8") as file:
         config = json.loads(file.read())
     # guild_ids = [int(x) for x in config["server_settings"].keys()]
-    guild_ids = [735922875931820033]
+    guild_ids = [735922875931820033]  # FIXME: Temporary whilst testing.
 
 
-def save_config():
+def save_config() -> None:
     global config
     # LINK - config.json
     with open("config.json", "w", encoding="utf8") as file:
         file.write(json.dumps(config, indent=4))
 
 
+config: dict[str, Any] = {}
+guild_ids: list[int] = []
 load_config()
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
@@ -89,7 +87,7 @@ def get_languaged_tag(
     tags: dict[str, str],
     tag: str,
     suffix: str = ":en",
-) -> tuple[str, str] | None:
+) -> tuple[str, str] | tuple[None, None]:
     if (k := (tag + suffix)) in tags:
         return k, tags[k]
     elif tag in tags:
@@ -98,51 +96,51 @@ def get_languaged_tag(
         return None, None
 
 
-def comma_every_three(text: str):
+def comma_every_three(text: str) -> str:
     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
 
 
 ## CLIENT ##
 
 
-@client.event
-async def on_ready():
+@client.event  # type: ignore
+async def on_ready() -> None:
     print(f"{client.user} is connected to the following guilds:\n")
     print("\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
 # Google Bad
-@slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)
-async def googlebad_command(ctx: SlashContext):
-    await ctx.send(choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
+@slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
+async def googlebad_command(ctx: SlashContext) -> None:
+    await ctx.send(random.choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
 
 
 # JOSM Tip
-@slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)
-async def josmtip_command(ctx: SlashContext):
-    await ctx.send(choice(josm_tips))
+@slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)  # type: ignore
+async def josmtip_command(ctx: SlashContext) -> None:
+    await ctx.send(random.choice(josm_tips))
 
 
 ### TagInfo ###
-@slash.slash(name="taginfo", description="Show taginfo for a tag.", guild_ids=guild_ids)
-async def taginfo_command(ctx: SlashContext, tag: str):
-    tag = tag.replace("`", "").split("=", 1)
+@slash.slash(name="taginfo", description="Show taginfo for a tag.", guild_ids=guild_ids)  # type: ignore
+async def taginfo_command(ctx: SlashContext, tag: str) -> None:
+    split_tag = tag.replace("`", "").split("=", 1)
 
-    if len(tag) == 2:
-        if tag[1] == "*" or "":
-            del tag[1]
+    if len(split_tag) == 2:
+        if split_tag[1] == "*" or "":
+            del split_tag[1]
 
-    if len(tag) == 1:
+    if len(split_tag) == 1:
         await ctx.defer()
-        return await ctx.send(embed=taginfo_embed(tag[0]))
-    elif len(tag) == 2:
+        await ctx.send(embed=taginfo_embed(split_tag[0]))
+    elif len(split_tag) == 2:
         await ctx.defer()
-        return await ctx.send(embed=taginfo_embed(tag[0], tag[1]))
+        await ctx.send(embed=taginfo_embed(split_tag[0], split_tag[1]))
     else:
-        return await ctx.send(f"Please provide a tag.", hidden=True)
+        await ctx.send("Please provide a tag.", hidden=True)
 
 
-def taginfo_embed(key: str, value: str | None = None):
+def taginfo_embed(key: str, value: str | None = None) -> Embed:
     if value:
         data = requests.get(config["taginfo_url"] + f"api/4/tag/stats?key={quote(key)}&value={quote(value)}").json()
         data_wiki = requests.get(
@@ -176,7 +174,7 @@ def taginfo_embed(key: str, value: str | None = None):
         embed.set_thumbnail(
             url=data_wiki_en["image"]["thumb_url_prefix"]
             + str(config["thumb_size"])
-            + data_wiki_en["image"]["thumb_url_suffix"]
+            + +data_wiki_en["image"]["thumb_url_suffix"]
         )
     else:
         embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
@@ -212,27 +210,27 @@ def taginfo_embed(key: str, value: str | None = None):
 
 
 ### Elements ###
-@slash.slash(name="elm", description="Show details about an element.", guild_ids=guild_ids)
-async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = ""):
-    extras = extras.split(",")
-
+@slash.slash(name="elm", description="Show details about an element.", guild_ids=guild_ids)  # type: ignore
+async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
     elm_type = elm_type.lower()
     if elm_type[0] in ELM_TYPES_FL:
         elm_type = ELM_TYPES_FL[elm_type[0]]
     else:
-        return await ctx.send("Invalid element type, please pick from `node`, `way` or `relation`.", hidden=True)
+        await ctx.send("Invalid element type, please pick from `node`, `way` or `relation`.", hidden=True)
+        return
 
     try:
         # Verify it's just a number to prevent injection or arbritrary text
         elm_id = str(int(elm_id))
-    except:
-        return await ctx.send("Incorrectly formatted element id.", hidden=True)
+    except ValueError:
+        await ctx.send("Incorrectly formatted element id.", hidden=True)
+        return
 
     await ctx.defer()
-    return await ctx.send(embed=elm_embed(elm_type, elm_id, extras))
+    await ctx.send(embed=elm_embed(elm_type, elm_id, extras.split(",")))
 
 
-def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
+def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json")
     elm = res.json()["elements"][0]
 
@@ -256,7 +254,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
 
     embed.title = elm_type.capitalize() + ": "
     key, name = get_languaged_tag(elm["tags"], "name")
-    if key:
+    if name:
         embed.title += name
     else:
         embed.title += elm_id
@@ -274,7 +272,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
         f"[OSM History Viewer](<https://pewu.github.io/osm-history/#/{elm_type}/{elm_id}>)"
         " • "
         # Note: https://aleung.github.io/osm-visual-history is basically identical, but has some minor fixes missing.
-        # i I'm using "Visual History" as the name, despite linking to deep history, as it decribes it's function better.
+        # I'm using "Visual History" as the name, despite linking to deep history, as it decribes it's function better.
         f"[Visual History](<https://osmlab.github.io/osm-deep-history/#/{elm_type}/{elm_id}>)"
         " • "
         f"[Mapki/Deep Diff](<http://osm.mapki.com/history/{elm_type}.php?id={elm_id}>)"
@@ -305,7 +303,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
         embed.add_field(name="Last editor", value=f"[{elm['user']}](<https://www.osm.org/user/{quote(elm['user'])}>)")
 
         if elm_type == "node":
-            # Discord dosen't appear to link the geo: URI :( I've left it in though incase it gets supported at some time.
+            # Discord dosen't appear to link the geo: URI :( I've left incase it gets supported at some time.
             embed.add_field(
                 name="Position (lat/lon)", value=f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
             )
@@ -325,26 +323,12 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable = []):
             )
             elm["tags"].pop("wikipedia")
 
-        # if "description" in elm["tags"]:
-        #     k, v = get_languaged_tag(elm["tags"], "description")
-        #     elm["tags"].pop(k)
-        #     embed.add_field(name="Description", value="> " + v, inline=False)
-        # if "inscription" in elm["tags"]:
-        #     k, v = get_languaged_tag(elm["tags"], "inscription")
-        #     elm["tags"].pop(k)
-        #     embed.add_field(name="Inscription", value="> " + v, inline=False)
-        if "note" in elm["tags"]:
-            k, v = get_languaged_tag(elm["tags"], "note")
-            elm["tags"].pop(k)
-            embed.add_field(name="Note", value="> " + v, inline=False)
-        if "FIXME" in elm["tags"]:
-            k, v = get_languaged_tag(elm["tags"], "FIXME")
-            elm["tags"].pop(k)
-            embed.add_field(name="FIXME", value="> " + v, inline=False)
-        elif "fixme" in elm["tags"]:
-            k, v = get_languaged_tag(elm["tags"], "fixme")
-            elm["tags"].pop(k)
-            embed.add_field(name="FIXME", value="> " + v, inline=False)
+        # "description", "inscription"
+        for key in ["note", "FIXME", "fixme"]:
+            key_languaged, value = get_languaged_tag(elm["tags"], "note")
+            if value:
+                elm["tags"].pop(key_languaged)
+                embed.add_field(name=key.capitalize(), value="> " + value, inline=False)
 
     if "tags" in extras:
         embed.add_field(
@@ -362,8 +346,8 @@ CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
 USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
 
 
-@client.event
-async def on_message(msg):
+@client.event  # type: ignore
+async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
@@ -398,12 +382,12 @@ async def on_message(msg):
 
 
 ### Suggestions
-@slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)
-async def suggest_command(ctx: SlashContext, suggestion: str):
+@slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)  # type: ignore
+async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
     await ctx.defer(hidden=True)
 
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
-        await ctx.send(f"Suggestions are not enabled on this server.", hidden=True)
+        await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
@@ -419,7 +403,7 @@ By: <@!{ctx.author.id}>
 Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {config['emoji']['vote_no']}.
 """
     )
-    done_msg = await ctx.send(
+    await ctx.send(
         f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>:"
         f"https://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}",
         hidden=True,
