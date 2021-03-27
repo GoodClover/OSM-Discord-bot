@@ -187,7 +187,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         embed.set_thumbnail(
             url=data_wiki_en["image"]["thumb_url_prefix"]
             + str(config["thumb_size"])
-            + +data_wiki_en["image"]["thumb_url_suffix"]
+            + data_wiki_en["image"]["thumb_url_suffix"]
         )
     else:
         embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
@@ -247,30 +247,29 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         ),
         create_option(
             name="extras",
-            description="Comma seperated list of extras from `info`, `tags`.",
+            description="Comma seperated list of extras from `info`, `tags` and `members`.",
             option_type=3,
             required=False,
         ),
     ],
 )  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
-    elm_type = elm_type.lower()
-    if elm_type[0] in ELM_TYPES_FL:
-        elm_type = ELM_TYPES_FL[elm_type[0]]
-    else:
-        await ctx.send("Invalid element type, please pick from `node`, `way` or `relation`.", hidden=True)
-        return
+    extras_list = [e.strip() for e in extras.lower().split(",")]
 
-    try:
-        # Verify it's just a number to prevent injection or arbritrary text
-        elm_id = str(int(elm_id))
-    except ValueError:
-        await ctx.send("Incorrectly formatted element id.", hidden=True)
+    for extra in extras_list:
+        if extra not in ["info", "elements", "members"]:
+            await ctx.send(
+                f"Unrecognised extra `{extra}`.\nPlease choose from `info`, `tags` and `members`.",
+                hidden=True,
+            )
+            return
+
+    if elm_type != "relation" and "members" in extras_list:
+        await ctx.send("Cannot show `members` of non-relation element.", hidden=True)
         return
 
     await ctx.defer()
-    extras_list = [e.strip() for e in extras.lower().split(",")]
-    await ctx.send(embed=elm_embed(elm_type, elm_id, extras_list))
+    await ctx.send(embed=elm_embed(elm_type, str(elm_id), extras_list))
 
 
 def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
@@ -298,7 +297,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
     embed.title = elm_type.capitalize() + ": "
     key, name = get_languaged_tag(elm["tags"], "name")
     if name:
-        embed.title += name
+        embed.title += f"{name} ({elm_id})"
     else:
         embed.title += elm_id
 
@@ -376,9 +375,24 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
     if "tags" in extras:
         embed.add_field(
             name="Tags",
-            value="\n".join([f"{config['emoji']['tag']}`{k}`=`{v}`" for k, v in elm["tags"].items()]),
+            value="\n".join([f"{config['emoji']['tag']}`{k}={v}`" for k, v in elm["tags"].items()]),
             inline=False,
         )
+
+    if "members" in extras:
+        if elm_type != "relation":
+            raise ValueError("Cannot show members of non-relation element.")
+        text = "\n".join(
+            [
+                f"{config['emoji'][member['type']]} "
+                + (f"`{member['role']}` " if member["role"] != "" else "")
+                + f"[{member['ref']}](https://osm.org/{member['type']}/{member['ref']})"
+                for member in elm["members"]
+            ]
+        )
+        if len(text) > 1024:
+            text = f"Too many members to list.\n[View on OSM.org](https://osm.org/{elm_type}/{elm_id})"
+        embed.add_field(name="Members", value=text, inline=False)
 
     return embed
 
