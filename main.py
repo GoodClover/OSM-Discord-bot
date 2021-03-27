@@ -114,23 +114,18 @@ async def on_ready():
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)
 async def googlebad_command(ctx: SlashContext):
-    await ctx.respond()
-    response = choice(ohnos).replace("...", "Whenever you mention Google Maps,")
-    await ctx.send(response)
+    await ctx.send(choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
 
 
 # JOSM Tip
 @slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)
 async def josmtip_command(ctx: SlashContext):
-    await ctx.respond()
-    response = choice(josm_tips)
-    await ctx.send(response)
+    await ctx.send(choice(josm_tips))
 
 
 ### TagInfo ###
 @slash.slash(name="taginfo", description="Show taginfo for a tag.", guild_ids=guild_ids)
 async def taginfo_command(ctx: SlashContext, tag: str):
-    await ctx.respond()
     tag = tag.replace("`", "").split("=", 1)
 
     if len(tag) == 2:
@@ -138,11 +133,13 @@ async def taginfo_command(ctx: SlashContext, tag: str):
             del tag[1]
 
     if len(tag) == 1:
+        await ctx.defer()
         return await ctx.send(embed=taginfo_embed(tag[0]))
     elif len(tag) == 2:
+        await ctx.defer()
         return await ctx.send(embed=taginfo_embed(tag[0], tag[1]))
     else:
-        return await ctx.send(f"Please provide a tag.", hidden=True, delete_after=config["autodelete_delay"])
+        return await ctx.send(f"Please provide a tag.", hidden=True)
 
 
 def taginfo_embed(key: str, value: str | None = None):
@@ -217,23 +214,21 @@ def taginfo_embed(key: str, value: str | None = None):
 ### Elements ###
 @slash.slash(name="elm", description="Show details about an element.", guild_ids=guild_ids)
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = ""):
-    await ctx.respond()
     extras = extras.split(",")
 
     elm_type = elm_type.lower()
     if elm_type[0] in ELM_TYPES_FL:
         elm_type = ELM_TYPES_FL[elm_type[0]]
     else:
-        return await ctx.repy(
-            "Invalid element type, please pick from `node`, `way` or `relation` (`n`,`w`,`r` for short)."
-        )
+        return await ctx.send("Invalid element type, please pick from `node`, `way` or `relation`.", hidden=True)
 
     try:
         # Verify it's just a number to prevent injection or arbritrary text
         elm_id = str(int(elm_id))
     except:
-        return await ctx.send("Incorrectly formatted element id.", hidden=True, delete_after=config["autodelete_delay"])
+        return await ctx.send("Incorrectly formatted element id.", hidden=True)
 
+    await ctx.defer()
     return await ctx.send(embed=elm_embed(elm_type, elm_id, extras))
 
 
@@ -402,16 +397,13 @@ async def on_message(msg):
         ref = None
 
 
-# Suggestions
+### Suggestions
 @slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)
 async def suggest_command(ctx: SlashContext, suggestion: str):
-    await ctx.respond()
+    await ctx.defer(hidden=True)
+
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
-        await ctx.send(
-            f"Suggestions are not enabled on this server.",
-            hidden=True,
-            delete_after=config["autodelete_delay"],
-        )
+        await ctx.send(f"Suggestions are not enabled on this server.", hidden=True)
         return
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
@@ -428,10 +420,9 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 """
     )
     done_msg = await ctx.send(
-        f"""Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>.
-https://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}""",
+        f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>:"
+        f"https://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}",
         hidden=True,
-        delete_after=config["autodelete_delay"],
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
     await sugg_msg.add_reaction(config["emoji"]["vote_abstain"])

@@ -1,4 +1,4 @@
 requests
 python-dotenv
 discord.py
-discord-py-slash-command
+discord-py-slash-command>=1.1.0
