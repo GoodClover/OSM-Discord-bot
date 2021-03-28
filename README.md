@@ -1,4 +1,4 @@
-# OSM Word Discord Bot
+# OSM Discord Bot
 
 Plans can be seen in [PLANS.md](PLANS.md).
 
