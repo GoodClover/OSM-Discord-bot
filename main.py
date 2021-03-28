@@ -257,7 +257,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
-        if extra not in ["info", "elements", "members"]:
+        if extra != "" and extra not in ["info", "tags", "members"]:
             await ctx.send(
                 f"Unrecognised extra `{extra}`.\nPlease choose from `info`, `tags` and `members`.",
                 hidden=True,
@@ -302,7 +302,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
         embed.title += elm_id
 
     if elm_type == "node":
-        embed.description = f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
+        embed.description = f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)\n"
     else:
         embed.description = ""
 
@@ -375,14 +375,14 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
     if "tags" in extras:
         embed.add_field(
             name="Tags",
-            value="\n".join([f"{config['emoji']['tag']}`{k}={v}`" for k, v in elm["tags"].items()]),
+            value="\n".join([f"`{k}={v}`" for k, v in elm["tags"].items()]),
             inline=False,
         )
 
     if "members" in extras:
         if elm_type != "relation":
             raise ValueError("Cannot show members of non-relation element.")
-        text = "\n".join(
+        text = "- " + "\n- ".join(
             [
                 f"{config['emoji'][member['type']]} "
                 + (f"`{member['role']}` " if member["role"] != "" else "")
@@ -397,7 +397,114 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
     return embed
 
 
-# Inline element linking
+### Changesets ###
+@slash.slash(
+    name="changeset",
+    description="Show details about a changeset.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="ID",
+            description="ID of the changeset",
+            option_type=4,
+            required=True,
+        ),
+        create_option(
+            name="extras",
+            description="Comma seperated list of extras from `info`, `tags`.",
+            option_type=3,
+            required=False,
+        ),
+    ],
+)  # type: ignore
+async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = "") -> None:
+    extras_list = [e.strip() for e in extras.lower().split(",")]
+
+    for extra in extras_list:
+        if extra != "" and extra not in ["info", "tags"]:
+            await ctx.send(
+                f"Unrecognised extra `{extra}`.\nPlease choose from `info` and `tags`.",
+                hidden=True,
+            )
+            return
+
+    await ctx.defer()
+    await ctx.send(embed=changeset_embed(str(changeset_id), extras_list))
+
+
+def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
+    res = requests.get(config["api_url"] + f"api/0.6/changeset/{changeset_id}.json")
+    changeset = res.json()["elements"][0]
+
+    #### Embed ####
+    embed = Embed()
+    embed.type = "rich"
+
+    embed.url = config["site_url"] + "changeset/" + changeset_id
+
+    embed.set_footer(
+        text=config["copyright_notice"],
+        icon_url=config["icon_url"],
+    )
+
+    # There dosen't appear to be a changeset icon
+    # embed.set_thumbnail(url=config["symbols"]["changeset"])
+
+    # embed.timestamp = datetime.now()
+    embed.timestamp = str_to_date(changeset["created_at"])
+
+    embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + changeset["user"])
+
+    embed.title = "Changeset: " + changeset_id
+
+    if "comment" in changeset["tags"]:
+        embed.description = "> " + changeset["tags"]["comment"].strip().replace("\n", "\n> ") + "\n"
+        changeset["tags"].pop("comment")
+    else:
+        embed.description = "*(no comment)*\n"
+
+    embed.description += f"[OSMCha](<https://osmcha.org/changesets/{changeset_id}>)"
+
+    #### Image ####
+    # * This would create significant stress to the OSM servers, so I don't reccomend it.
+    # ! This dosen't work due to the OSM servers having some form of token check.
+    # img_url = (
+    #     "https://render.openstreetmap.org/cgi-bin/export?bbox="
+    #     f"{changeset['minlon']},{changeset['minlat']},{changeset['maxlon']},{changeset['maxlat']}"
+    #     "&scale=1800&format=png"
+    # )
+    # embed.set_image(url=img_url)
+
+    #### Fields ####
+    if "info" in extras:
+        embed.add_field(name="Comments", value=changeset["comments_count"])
+        embed.add_field(name="Changes", value=changeset["changes_count"])
+        embed.add_field(name="Created", value=changeset["created_at"])
+        embed.add_field(name="Closed", value=changeset["closed_at"])
+
+        if "comment" in changeset["tags"]:
+            embed.add_field(name="Comment", value=changeset["tags"]["comment"])
+            changeset["tags"].pop("comment")
+
+        if "source" in changeset["tags"]:
+            embed.add_field(name="Source", value=changeset["tags"]["source"])
+            changeset["tags"].pop("source")
+
+        if "created_by" in changeset["tags"]:
+            embed.add_field(name="Created by", value=changeset["tags"]["created_by"])
+            changeset["tags"].pop("created_by")
+
+    if "tags" in extras:
+        embed.add_field(
+            name="Tags",
+            value="- " + "\n- ".join([f"`{k}={v}`" for k, v in changeset["tags"].items()]),
+            inline=False,
+        )
+
+    return embed
+
+
+### Inline linking ###
 ELM_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation)\/\d+(?!\/|[^\W])"
 CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
 USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
@@ -411,26 +518,17 @@ async def on_message(msg: Message) -> None:
     # The reference code is because I only want to make the first message a reply, to make it look neat.
     ref = msg
 
-    # Elements
     elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
+    changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
+    users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
 
     for elm_type, elm_id in elms:
         await msg.channel.send(embed=elm_embed(elm_type, elm_id), reference=ref)
         ref = None
 
-    # Changesets
-    changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
-
-    if len(changesets) != 0:
-        links = [
-            f"{config['emoji']['changeset']} <https://www.osm.org/changeset/{changeset_id}>"
-            for changeset_id in changesets
-        ]
-        await msg.channel.send("\n".join(links), reference=ref)
+    for changeset_id in changesets:
+        await msg.channel.send(embed=changeset_embed(changeset_id), reference=ref)
         ref = None
-
-    # Users
-    users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
 
     if len(users) != 0:
         links = [f"{config['emoji']['user']} <https://www.osm.org/user/{username}>" for username in users]
@@ -438,7 +536,7 @@ async def on_message(msg: Message) -> None:
         ref = None
 
 
-### Suggestions
+### Suggestions ###
 @slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)  # type: ignore
 async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
     await ctx.defer(hidden=True)
