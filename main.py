@@ -601,25 +601,28 @@ async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
-    # The reference code is because I only want to make the first message a reply, to make it look neat.
-    ref = msg
-
+    # Find matches
     elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
     changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
 
+    # Create the embeds
+    embeds = []
+
     for elm_type, elm_id in elms:
-        await msg.channel.send(embed=elm_embed(elm_type, elm_id), reference=ref)
-        ref = None
+        embeds.append(elm_embed(elm_type, elm_id))
 
     for changeset_id in changesets:
-        await msg.channel.send(embed=changeset_embed(changeset_id), reference=ref)
-        ref = None
+        embeds.append(changeset_embed(changeset_id))
 
     for username in users:
-        print(username)
-        await msg.channel.send(embed=user_embed(str(get_id_from_username(username))), reference=ref)
-        ref = None
+        embeds.append(user_embed(str(get_id_from_username(username))))
+
+    # Send the embeds
+    if len(embeds) > 0:
+        await msg.channel.send(embed=embeds[0], reference=msg)
+        for embed in embeds[1:]:
+            await msg.channel.send(embed=embed)
 
 
 ### Suggestions ###
