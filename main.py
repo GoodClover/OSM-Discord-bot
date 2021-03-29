@@ -504,6 +504,92 @@ def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
     return embed
 
 
+### Users ###
+@slash.slash(
+    name="user",
+    description="Show details about a user.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="username",
+            description="Username of the user.",
+            option_type=3,
+            required=True,
+        ),
+        create_option(
+            name="extras",
+            description="Comma seperated list of extras from `info`.",
+            option_type=3,
+            required=False,
+        ),
+    ],
+)  # type: ignore
+async def user_command(ctx: SlashContext, username: str, extras: str = "") -> None:
+    extras_list = [e.strip() for e in extras.lower().split(",")]
+
+    for extra in extras_list:
+        if extra != "" and extra not in ["info"]:
+            await ctx.send(
+                f"Unrecognised extra `{extra}`.\nPlease choose from `info`.",
+                hidden=True,
+            )
+            return
+
+    user_id = get_id_from_username(username)
+
+    await ctx.defer()
+    await ctx.send(embed=user_embed(str(user_id), extras_list))
+
+
+def get_id_from_username(username) -> int:
+    whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
+    return whosthat[0]["id"]
+
+
+def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
+    res = requests.get(config["api_url"] + f"api/0.6/user/{user_id}.json")
+    user = res.json()["user"]
+
+    #### Embed ####
+    embed = Embed()
+    embed.type = "rich"
+
+    embed.url = config["site_url"] + "user/" + user["display_name"]
+
+    embed.set_footer(
+        text=config["copyright_notice"],
+        icon_url=config["icon_url"],
+    )
+
+    embed.set_thumbnail(url=user["img"]["href"])
+
+    # embed.timestamp = datetime.now()
+    embed.timestamp = str_to_date(user["account_created"])
+
+    embed.title = "User: " + user["display_name"]
+
+    embed.description = (
+        f"[HDYC](<https://hdyc.neis-one.org/?{user['display_name']}>)"
+        "•"
+        f"[YOSMHM](<https://yosmhm.neis-one.org/?{user['display_name']}>)"
+    )
+
+    #### Fields ####
+    if "info" in extras:
+        if len(user["roles"]) > 0:
+            embed.add_field(name="Roles", value=", ".join(user["roles"]))
+        embed.add_field(name="Changesets", value=user["changesets"]["count"])
+        embed.add_field(name="Traces", value=user["traces"]["count"])
+        embed.add_field(name="Contributor Terms", value="Agreed" if user["contributor_terms"]["agreed"] else "Unknown")
+        if user["blocks"]["received"]["count"] > 0:
+            embed.add_field(
+                name="Blocks",
+                value=f"Count: {user['blocks']['received']['count']}\nActive: {user['blocks']['received']['active']}",
+            )
+
+    return embed
+
+
 ### Inline linking ###
 ELM_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation)\/\d+(?!\/|[^\W])"
 CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
@@ -530,9 +616,9 @@ async def on_message(msg: Message) -> None:
         await msg.channel.send(embed=changeset_embed(changeset_id), reference=ref)
         ref = None
 
-    if len(users) != 0:
-        links = [f"{config['emoji']['user']} <https://www.osm.org/user/{username}>" for username in users]
-        await msg.channel.send("\n".join(links), reference=ref)
+    for username in users:
+        print(username)
+        await msg.channel.send(embed=user_embed(str(get_id_from_username(username))), reference=ref)
         ref = None
 
 

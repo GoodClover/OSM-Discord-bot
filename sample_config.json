@@ -6,6 +6,7 @@
     "site_url": "https://www.openstreetmap.org/",
     "api_url": "https://api.openstreetmap.org/",
     "taginfo_url": " https://taginfo.openstreetmap.org/",
+    "whosthat_url": "http://whosthat.osmz.ru/",
     "icon_url": "https://wiki.openstreetmap.org/w/images/c/c8/Public-images-osm_logo.png",
     "taginfo_icon_url": "https://wiki.openstreetmap.org/w/images/3/32/TagInfo_logo.png",
     "copyright_notice": "\u00a9 OpenStreetMap contributors, ODbL",
