@@ -688,9 +688,15 @@ async def get_image_cluster(
 
 
 ### Inline linking ###
-ELM_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation)\/\d+(?!\/|[^\W])"
-CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
-USER_INLINE_REGEX = r"(?<!\/|[^\W])user\/[\w\-_]+(?!\/|[^\W])"
+SS = r"(?<!\/|\w)"  # Safe Start
+SE = r"(?!\/|\w)"  # Safe End
+DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
+POS_INT = r"[0-9]+"
+
+ELM_INLINE_REGEX = rf"{SS}(?:node|way|relation)\/{POS_INT}{SE}"
+CHANGESET_INLINE_REGEX = rf"{SS}changeset\/{POS_INT}{SE}"
+USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
+MAP_FRAGMENT = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 
 
 @client.event  # type: ignore
