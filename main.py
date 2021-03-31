@@ -621,15 +621,17 @@ async def map_command_url(ctx: SlashContext, URL: str) -> None:
 
     # * Discord has a weird limitation where you can't send an attachment (image) in the first slash command respose.
     first_msg = await ctx.send("Getting image…")
+    with ctx.channel.typing():
 
-    image_file = await get_image_cluster(lat_deg, lon_deg, zoom_int)
+        image_file = await get_image_cluster(lat_deg, lon_deg, zoom_int)
 
-    if URL.startswith("#"):
-        msg = f"<{config['site_url'] + URL}>"
-    else:
-        msg = f"<{URL}>"
+        if URL.startswith("#"):
+            msg = f"<{config['site_url'] + URL}>"
+        else:
+            msg = f"<{URL}>"
 
-    img_msg = await ctx.channel.send(msg, file=image_file)
+        img_msg = await ctx.channel.send(msg, file=image_file)
+
     await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
 
 
