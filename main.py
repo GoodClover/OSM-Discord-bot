@@ -615,17 +615,14 @@ def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
 async def map_command_url(ctx: SlashContext, URL: str) -> None:
 
     try:
-        zoom, lat, lon = URL.split("#", 1)[1].removeprefix("map=").split("/", 2)
-        zoom_int = int(zoom)
-        lat_deg = float(lat)
-        lon_deg = float(lon)
+        zoom_int, lat_deg, lon_deg = frag_to_bits(URL)
     except ValueError:
         await ctx.send("Invalid map fragment. Expected to be in format `#map=zoom/lat/lon`", hidden=True)
 
     # * Discord has a weird limitation where you can't send an attachment (image) in the first slash command respose.
     first_msg = await ctx.send("Getting image…")
 
-    image_file = await get_image_cluster(ctx, lat_deg, lon_deg, zoom_int)
+    image_file = await get_image_cluster(lat_deg, lon_deg, zoom_int)
 
     if URL.startswith("#"):
         msg = f"<{config['site_url'] + URL}>"
@@ -633,7 +630,12 @@ async def map_command_url(ctx: SlashContext, URL: str) -> None:
         msg = f"<{URL}>"
 
     img_msg = await ctx.channel.send(msg, file=image_file)
-    await first_msg.edit(content=f"Getting image… Done[!](<{msg_to_link(img_msg)}> \"Link to message with image\") :map:")
+    await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
+
+
+def frag_to_bits(URL: str) -> tuple[int, float, float]:
+    zoom, lat, lon = URL.split("#", 1)[1].removeprefix("map=").split("/", 2)
+    return int(zoom), float(lat), float(lon)
 
 
 def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
@@ -657,7 +659,6 @@ HEADERS = {
 
 
 async def get_image_cluster(
-    ctx: SlashContext,
     lat_deg: float,
     lon_deg: float,
     zoom: int,
@@ -696,6 +697,7 @@ POS_INT = r"[0-9]+"
 ELM_INLINE_REGEX = rf"{SS}(?:node|way|relation)\/{POS_INT}{SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}changeset\/{POS_INT}{SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
+# FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 
 
@@ -708,24 +710,41 @@ async def on_message(msg: Message) -> None:
     elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
     changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
+    map_frags = re.findall(MAP_FRAGMENT, msg.clean_content)
 
-    # Create the embeds
-    embeds = []
+    if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
+        return
 
-    for elm_type, elm_id in elms:
-        embeds.append(elm_embed(elm_type, elm_id))
+    async with msg.channel.typing():
+        # Create the messages
+        embeds: list[Embed] = []
+        files: list[File] = []
 
-    for changeset_id in changesets:
-        embeds.append(changeset_embed(changeset_id))
+        for elm_type, elm_id in elms:
+            embeds.append(elm_embed(elm_type, elm_id))
 
-    for username in users:
-        embeds.append(user_embed(str(get_id_from_username(username))))
+        for changeset_id in changesets:
+            embeds.append(changeset_embed(changeset_id))
 
-    # Send the embeds
-    if len(embeds) > 0:
-        await msg.channel.send(embed=embeds[0], reference=msg)
-        for embed in embeds[1:]:
-            await msg.channel.send(embed=embed)
+        for username in users:
+            embeds.append(user_embed(str(get_id_from_username(username))))
+
+        for map_frag in map_frags:
+            zoom, lat, lon = frag_to_bits(map_frag)
+            files.append(await get_image_cluster(lat, lon, zoom))
+
+        # Send the messages
+        if len(embeds) > 0:
+            await msg.channel.send(embed=embeds[0], reference=msg)
+            for embed in embeds[1:]:
+                await msg.channel.send(embed=embed)
+            for file in files:
+                await msg.channel.send(file=file)
+
+        elif len(files) > 0:
+            await msg.channel.send(file=files[0], reference=msg)
+            for file in files[1:]:
+                await msg.channel.send(file=file)
 
 
 ### Suggestions ###
