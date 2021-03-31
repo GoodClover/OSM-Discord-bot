@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Union
 
 ## IMPORTS ##
 import os
@@ -9,12 +9,16 @@ import json
 from datetime import datetime
 from urllib.parse import quote, unquote
 import re
+import math
+from io import BytesIO
 
 import requests
 from dotenv import load_dotenv
-from discord import Message, Client, Embed, AllowedMentions
+from discord import Message, Client, Embed, AllowedMentions, File
 from discord_slash import SlashCommand, SlashContext
+from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
+from PIL import Image
 
 
 ## SETUP ##
@@ -99,6 +103,10 @@ def get_languaged_tag(
 
 def comma_every_three(text: str) -> str:
     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
+
+
+def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
+    return f"https://discord.com/channels/{msg.guild.id}/{msg.channel.id}/{msg.id}"
 
 
 ## CLIENT ##
@@ -590,6 +598,95 @@ def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
     return embed
 
 
+### Show Map ###
+@slash.slash(
+    name="mapURL",
+    description="Show the map of an area from URL fragment.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="URL",
+            description="URL that ends in a fragment, or just the fragment. e.g. `#map=19/33.45169/126.48982`",
+            option_type=3,
+            required=True,
+        )
+    ],
+)  # type: ignore
+async def map_command_url(ctx: SlashContext, URL: str) -> None:
+
+    try:
+        zoom, lat, lon = URL.split("#", 1)[1].removeprefix("map=").split("/", 2)
+        zoom_int = int(zoom)
+        lat_deg = float(lat)
+        lon_deg = float(lon)
+    except ValueError:
+        await ctx.send("Invalid map fragment. Expected to be in format `#map=zoom/lat/lon`", hidden=True)
+
+    # * Discord has a weird limitation where you can't send an attachment (image) in the first slash command respose.
+    first_msg = await ctx.send("Getting image…")
+
+    image_file = await get_image_cluster(ctx, lat_deg, lon_deg, zoom_int)
+
+    if URL.startswith("#"):
+        msg = f"<{config['site_url'] + URL}>"
+    else:
+        msg = f"<{URL}>"
+
+    img_msg = await ctx.channel.send(msg, file=image_file)
+    await first_msg.edit(content=f"Getting image… Done[!](<{msg_to_link(img_msg)}> \"Link to message with image\") :map:")
+
+
+def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
+    # I have no clue how this works.
+    # Taken from https://github.com/ForgottenHero/mr-maps
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
+    return (xtile, ytile)
+
+
+HEADERS = {
+    "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
+    "Accept": "image/png",
+    "Accept-Charset": "utf-8",
+    "Accept-Encoding": "none",
+    "Accept-Language": "en-GB,en",
+    "Connection": "keep-alive",
+}
+
+
+async def get_image_cluster(
+    ctx: SlashContext,
+    lat_deg: float,
+    lon_deg: float,
+    zoom: int,
+    tile_url: str = config["tile_url"],
+) -> File:
+    # Modified from https://github.com/ForgottenHero/mr-maps
+    delta_long = 0.00421 * math.pow(2, 19 - int(zoom))
+    delta_lat = 0.0012 * math.pow(2, 19 - int(zoom))
+    lat_deg = float(lat_deg) - (delta_lat / 2)
+    lon_deg = float(lon_deg) - (delta_long / 2)
+    i = 0
+    j = 0
+    xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
+    xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
+    Cluster = Image.new("RGB", ((xmax - xmin + 1) * 256 - 1, (ymax - ymin + 1) * 256 - 1))
+    for xtile in range(xmin, xmax + 1):
+        for ytile in range(ymin, ymax + 1):
+            try:
+                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
+                tile = Image.open(BytesIO(res.content))
+                Cluster.paste(tile, box=((xtile - xmin) * 256, (ytile - ymin) * 255))
+                i = i + 1
+            except Exception as e:
+                print(e)
+        j = j + 1
+    Cluster.save("data/cluster.png")
+    return File("data/cluster.png")
+
+
 ### Inline linking ###
 ELM_INLINE_REGEX = r"(?<!\/|[^\W])(?:node|way|relation)\/\d+(?!\/|[^\W])"
 CHANGESET_INLINE_REGEX = r"(?<!\/|[^\W])changeset\/[\w\-_]+(?!\/|[^\W])"
@@ -649,7 +746,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     )
     await ctx.send(
         f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>:"
-        f"https://discord.com/channels/{sugg_msg.guild.id}/{sugg_msg.channel.id}/{sugg_msg.id}",
+        + msg_to_link(sugg_msg),
         hidden=True,
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
