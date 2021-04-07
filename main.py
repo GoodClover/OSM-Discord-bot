@@ -39,6 +39,12 @@ TYPES_FL = {
 }
 NL = "\n"  # This is used as you can't put \n in an f-string expression.
 
+# Regex
+SS = r"(?<!\/|\w)"  # Safe Start
+SE = r"(?!\/|\w)"  # Safe End
+DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
+POS_INT = r"[0-9]+"
+
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -101,8 +107,9 @@ def get_languaged_tag(
         return None, None
 
 
-def comma_every_three(text: str) -> str:
-    return ",".join(re.findall("...", str(text)[::-1]))[::-1]
+# This dosen't work correct.
+# def comma_every_three(text: str) -> str:
+#     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
 
 
 def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
@@ -171,7 +178,8 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         data = requests.get(config["taginfo_url"] + f"api/4/key/stats?key={quote(key)}").json()
         data_wiki = requests.get(config["taginfo_url"] + f"api/4/key/wiki_pages?key={quote(key)}").json()
 
-    data_wiki_en = [lang for lang in data_wiki["data"] if lang["lang"] == "en"][0]
+    data_wiki_en_list = [lang for lang in data_wiki["data"] if lang["lang"] == "en"]
+    data_wiki_en = data_wiki_en_list[0] if data_wiki_en_list else None
 
     #### Embed ####
     embed = Embed()
@@ -191,7 +199,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         icon_url=config["taginfo_icon_url"],
     )
 
-    if data_wiki_en["image"]["image_url"]:
+    if data_wiki_en and data_wiki_en["image"]["image_url"]:
         embed.set_thumbnail(
             url=data_wiki_en["image"]["thumb_url_prefix"]
             + str(config["thumb_size"])
@@ -200,21 +208,22 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     else:
         embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
 
-    # embed.timestamp = datetime.now()
     # This is the last time taginfo updated:
     embed.timestamp = str_to_date(data["data_until"])
 
     embed.set_author(name="taginfo", url=config["taginfo_url"] + "about")
 
-    embed.description = data_wiki_en["description"]
+    if data_wiki_en:
+        embed.description = data_wiki_en["description"]
 
     #### Fields ####
     d = data["data"][0]
     embed.add_field(
         # This gets the emoji. Removes "s" from the end if it is there to do this.
         name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
-        value=f"{comma_every_three(d['count'])} - {d['count_fraction']*100}%"
-        + (f"\n{comma_every_three(d['values'])} values" if not value else ""),
+        value=(f"{d['count']} - {d['count_fraction']*100}%" + (f"\n{d['values']} values" if not value else ""))
+        if d["count"] > 0
+        else "*None*",
         inline=False,
     )
     del data["data"][0]
@@ -222,8 +231,9 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         embed.add_field(
             # This gets the emoji. Removes "s" from the end if it is there to do this.
             name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
-            value=f"{comma_every_three(d['count'])} - {d['count_fraction']*100}%"
-            + (f"\n{comma_every_three(d['values'])} values" if not value else ""),
+            value=(f"{d['count']} - {d['count_fraction']*100}%" + (f"\n{d['values']} values" if not value else ""))
+            if d["count"] > 0
+            else "*None*",
             inline=True,
         )
 
@@ -297,13 +307,15 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
 
     embed.set_thumbnail(url=config["symbols"][elm_type])
 
-    # embed.timestamp = datetime.now()
-    # embed.timestamp = str_to_date(elm["timestamp"])
+    embed.timestamp = str_to_date(elm["timestamp"])
 
     # embed.set_author(name=elm["user"], url=config["site_url"] + "user/" + elm["user"])
 
     embed.title = elm_type.capitalize() + ": "
-    key, name = get_languaged_tag(elm["tags"], "name")
+    if "tags" in elm:
+        key, name = get_languaged_tag(elm["tags"], "name")
+    else:
+        name = None
     if name:
         embed.title += f"{name} ({elm_id})"
     else:
@@ -358,49 +370,56 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
                 name="Position (lat/lon)", value=f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
             )
 
-        if "wikidata" in elm["tags"]:
-            embed.add_field(
-                name="Wikidata",
-                value=f"[{elm['tags']['wikidata']}](<https://www.wikidata.org/wiki/{elm['tags']['wikidata']}>)",
-            )
-            elm["tags"].pop("wikidata")
+        if "tags" in elm:
+            if "wikidata" in elm["tags"]:
+                embed.add_field(
+                    name="Wikidata",
+                    value=f"[{elm['tags']['wikidata']}](<https://www.wikidata.org/wiki/{elm['tags']['wikidata']}>)",
+                )
+                elm["tags"].pop("wikidata")
 
-        if "wikipedia" in elm["tags"]:
-            # Will automatically redirect to language linked in tag.
-            embed.add_field(
-                name="Wikipedia",
-                value=f"[{elm['tags']['wikipedia']}](<https://wikipedia.org/wiki/{quote(elm['tags']['wikipedia'])}>)",
-            )
-            elm["tags"].pop("wikipedia")
+            if "wikipedia" in elm["tags"]:
+                # Will automatically redirect to language linked in tag.
+                embed.add_field(
+                    name="Wikipedia",
+                    value=f"[{elm['tags']['wikipedia']}](<https://wikipedia.org/wiki/{quote(elm['tags']['wikipedia'])}>)",
+                )
+                elm["tags"].pop("wikipedia")
 
-        # "description", "inscription"
-        for key in ["note", "FIXME", "fixme"]:
-            key_languaged, value = get_languaged_tag(elm["tags"], "note")
-            if value:
-                elm["tags"].pop(key_languaged)
-                embed.add_field(name=key.capitalize(), value="> " + value, inline=False)
+            # "description", "inscription"
+            for key in ["note", "FIXME", "fixme"]:
+                key_languaged, value = get_languaged_tag(elm["tags"], "note")
+                if value:
+                    elm["tags"].pop(key_languaged)
+                    embed.add_field(name=key.capitalize(), value="> " + value, inline=False)
 
     if "tags" in extras:
-        embed.add_field(
-            name="Tags",
-            value="\n".join([f"`{k}={v}`" for k, v in elm["tags"].items()]),
-            inline=False,
-        )
+        if "tags" in elm:
+            embed.add_field(
+                name="Tags",
+                value="\n".join([f"`{k}={v}`" for k, v in elm["tags"].items()]),
+                inline=False,
+            )
+        else:
+            embed.add_field(name="Tags", value="*(no tags)*", inline=False)
 
     if "members" in extras:
         if elm_type != "relation":
             raise ValueError("Cannot show members of non-relation element.")
-        text = "- " + "\n- ".join(
-            [
-                f"{config['emoji'][member['type']]} "
-                + (f"`{member['role']}` " if member["role"] != "" else "")
-                + f"[{member['ref']}](https://osm.org/{member['type']}/{member['ref']})"
-                for member in elm["members"]
-            ]
-        )
-        if len(text) > 1024:
-            text = f"Too many members to list.\n[View on OSM.org](https://osm.org/{elm_type}/{elm_id})"
-        embed.add_field(name="Members", value=text, inline=False)
+        if "members" in elm:
+            text = "- " + "\n- ".join(
+                [
+                    f"{config['emoji'][member['type']]} "
+                    + (f"`{member['role']}` " if member["role"] != "" else "")
+                    + f"[{member['ref']}](https://osm.org/{member['type']}/{member['ref']})"
+                    for member in elm["members"]
+                ]
+            )
+            if len(text) > 1024:
+                text = f"Too many members to list.\n[View on OSM.org](https://osm.org/{elm_type}/{elm_id})"
+            embed.add_field(name="Members", value=text, inline=False)
+        else:
+            embed.add_field(name="Members", value="*(no members)*", inline=False)
 
     return embed
 
@@ -458,18 +477,20 @@ def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
     # There dosen't appear to be a changeset icon
     # embed.set_thumbnail(url=config["symbols"]["changeset"])
 
-    # embed.timestamp = datetime.now()
-    embed.timestamp = str_to_date(changeset["created_at"])
+    embed.timestamp = str_to_date(changeset["closed_at"])
 
     embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + changeset["user"])
 
     embed.title = "Changeset: " + changeset_id
 
-    if "comment" in changeset["tags"]:
-        embed.description = "> " + changeset["tags"]["comment"].strip().replace("\n", "\n> ") + "\n"
+    #### Description ####
+    embed.description = ""
+
+    if "tags" in changeset and "comment" in changeset["tags"]:
+        embed.description += "> " + changeset["tags"]["comment"].strip().replace("\n", "\n> ") + "\n\n"
         changeset["tags"].pop("comment")
     else:
-        embed.description = "*(no comment)*\n"
+        embed.description += "*(no comment)*\n\n"
 
     embed.description += f"[OSMCha](<https://osmcha.org/changesets/{changeset_id}>)"
 
@@ -490,24 +511,24 @@ def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
         embed.add_field(name="Created", value=changeset["created_at"])
         embed.add_field(name="Closed", value=changeset["closed_at"])
 
-        if "comment" in changeset["tags"]:
-            embed.add_field(name="Comment", value=changeset["tags"]["comment"])
-            changeset["tags"].pop("comment")
+        if "tags" in changeset:
+            if "source" in changeset["tags"]:
+                embed.add_field(name="Source", value=changeset["tags"]["source"])
+                changeset["tags"].pop("source")
 
-        if "source" in changeset["tags"]:
-            embed.add_field(name="Source", value=changeset["tags"]["source"])
-            changeset["tags"].pop("source")
-
-        if "created_by" in changeset["tags"]:
-            embed.add_field(name="Created by", value=changeset["tags"]["created_by"])
-            changeset["tags"].pop("created_by")
+            if "created_by" in changeset["tags"]:
+                embed.add_field(name="Created by", value=changeset["tags"]["created_by"])
+                changeset["tags"].pop("created_by")
 
     if "tags" in extras:
-        embed.add_field(
-            name="Tags",
-            value="- " + "\n- ".join([f"`{k}={v}`" for k, v in changeset["tags"].items()]),
-            inline=False,
-        )
+        if "tags" in changeset:
+            embed.add_field(
+                name="Tags",
+                value="- " + "\n- ".join([f"`{k}={v}`" for k, v in changeset["tags"].items()]),
+                inline=False,
+            )
+        else:
+            embed.add_field(name="Tags", value="*(no tags)*", inline=False)
 
     return embed
 
@@ -537,13 +558,14 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
 
     for extra in extras_list:
         if extra != "" and extra not in ["info"]:
-            await ctx.send(
-                f"Unrecognised extra `{extra}`.\nPlease choose from `info`.",
-                hidden=True,
-            )
+            await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info`.", hidden=True)
             return
 
-    user_id = get_id_from_username(username)
+    try:
+        user_id = get_id_from_username(username)
+    except ValueError:
+        await ctx.send(f"User '{username}' not found.", hidden=True)
+        return
 
     await ctx.defer()
     await ctx.send(embed=user_embed(str(user_id), extras_list))
@@ -551,7 +573,10 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
 
 def get_id_from_username(username) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
-    return whosthat[0]["id"]
+    if len(whosthat) > 0:
+        return whosthat[0]["id"]
+    else:
+        raise ValueError("User not found")
 
 
 def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
@@ -572,13 +597,13 @@ def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
     embed.set_thumbnail(url=user["img"]["href"])
 
     # embed.timestamp = datetime.now()
-    embed.timestamp = str_to_date(user["account_created"])
+    # embed.timestamp = str_to_date(user["account_created"])
 
     embed.title = "User: " + user["display_name"]
 
     embed.description = (
         f"[HDYC](<https://hdyc.neis-one.org/?{user['display_name']}>)"
-        "•"
+        " • "
         f"[YOSMHM](<https://yosmhm.neis-one.org/?{user['display_name']}>)"
     )
 
@@ -618,6 +643,7 @@ async def map_command_url(ctx: SlashContext, URL: str) -> None:
         zoom_int, lat_deg, lon_deg = frag_to_bits(URL)
     except ValueError:
         await ctx.send("Invalid map fragment. Expected to be in format `#map=zoom/lat/lon`", hidden=True)
+        return
 
     # * Discord has a weird limitation where you can't send an attachment (image) in the first slash command respose.
     first_msg = await ctx.send("Getting image…")
@@ -625,18 +651,23 @@ async def map_command_url(ctx: SlashContext, URL: str) -> None:
 
         image_file = await get_image_cluster(lat_deg, lon_deg, zoom_int)
 
-        if URL.startswith("#"):
-            msg = f"<{config['site_url'] + URL}>"
-        else:
-            msg = f"<{URL}>"
+        # TODO: I probabbly need to get some better injection protection at some point.
+        # This works though so eh ¯\_(ツ)_/¯
+        msg = f"<{config['site_url']}#map={zoom_int}/{lat_deg}/{lon_deg}>"
 
         img_msg = await ctx.channel.send(msg, file=image_file)
 
     await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
 
 
+MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
+
+
 def frag_to_bits(URL: str) -> tuple[int, float, float]:
-    zoom, lat, lon = URL.split("#", 1)[1].removeprefix("map=").split("/", 2)
+    matches = re.findall(MAP_FRAGEMT_CAPTURING_REGEX, URL)
+    if len(matches) != 1:
+        raise ValueError("Invalid map fragment URL.")
+    zoom, lat, lon = matches[0]
     return int(zoom), float(lat), float(lon)
 
 
@@ -691,16 +722,11 @@ async def get_image_cluster(
 
 
 ### Inline linking ###
-SS = r"(?<!\/|\w)"  # Safe Start
-SE = r"(?!\/|\w)"  # Safe End
-DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
-POS_INT = r"[0-9]+"
-
 ELM_INLINE_REGEX = rf"{SS}(?:node|way|relation)\/{POS_INT}{SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}changeset\/{POS_INT}{SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
-MAP_FRAGMENT = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
+MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 
 
 @client.event  # type: ignore
@@ -712,7 +738,7 @@ async def on_message(msg: Message) -> None:
     elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
     changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
-    map_frags = re.findall(MAP_FRAGMENT, msg.clean_content)
+    map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
     if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
         return
