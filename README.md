@@ -1,7 +1,5 @@
 # OSM Discord Bot
 
-Plans can be seen in [PLANS.md](PLANS.md).
-
 ## Features
 
 ### View elements `/elm`
