@@ -14,7 +14,7 @@ from io import BytesIO
 
 import requests
 from dotenv import load_dotenv
-from discord import Message, Client, Embed, AllowedMentions, File
+from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
@@ -76,6 +76,7 @@ with open(config["josm_tips_file"], "r", encoding="utf8") as file:
     josm_tips = [entry for entry in file.read().split("\n\n") if entry != ""]
 
 client = Client(
+    intents=Intents.all(),
     allowed_mentions=AllowedMentions(
         # I also use checks elsewhere to prevent @ injection.
         everyone=False,
@@ -773,6 +774,23 @@ async def on_message(msg: Message) -> None:
             await msg.channel.send(file=files[0], reference=msg)
             for file in files[1:]:
                 await msg.channel.send(file=file)
+
+
+### Member count ###
+@client.event  # type: ignore
+async def on_member_join(member: Member) -> None:
+    await update_member_count(member.guild)
+
+
+@client.event  # type: ignore
+async def on_member_remove(member: Member) -> None:
+    await update_member_count(member.guild)
+
+
+async def update_member_count(guild: Guild) -> None:
+    mappers_count_channel = guild.get_channel(config["server_settings"][str(guild.id)]["mappers_count_channel"])
+    text = config["mappers_count_text"].replace("{mappers}", str(guild.member_count))
+    await mappers_count_channel.edit(name=text)
 
 
 ### Suggestions ###
