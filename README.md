@@ -2,38 +2,18 @@
 
 ## Features
 
-### View elements `/elm`
+For a full list of commands see [COMMANDS.md](COMMANDS.md).
+These are slash commands so Discord will also tell you what the commands do and how to use them.
 
-`/elm <type> <id> <extras>`
+If they are enabled, the bot can show suggestions in a specific channel.
 
-View info about an OSM element.
-Gives basic info such as the name and links to a bunch of sites where you can see more about the element.
+The bot also updates a member count upon someone joining/leaving the server.
 
-`<extras>` is a comma seperated list of:
+Embedding of elmenents, users and changesets also works by putting the following somewhere in your message in addition to using the command, using the command enabled getting extra info though if it's wanted:
 
-- `info`: view extra info about the element.
-- `tags`: show the element's tags.
-- `members`: show the members of a relation.
-
-Note: Due to Discord API limits, listing tags and members may not be possible if there are too many.
-
-### View tag**info** `/taginfo`
-
-`/taginfo <tag>`
-
-View the tag**info** stats of a tag.
-
-### `/googlebad` and `/josmtip`
-
-View a random message from the [ohno-OSM](/GoodClover/ohno-OSM) repo.
-
-### Suggestions `/suggest`
-
-`/suggest <suggestion>`
-
-⚠️ This is unfinished and not really tested, will only develop more if needed.
-
-Allows people to post suggestions and react with an emoji in a set channel.
+- `node/<ID>` (`way` and `relation` work too)
+- `user/<username>`
+- `changeset/<ID>`
 
 ## Configuration
 
@@ -52,7 +32,7 @@ DISCORD_TOKEN=<bot-token>
 
 ## License
 
-[Could One Credit a Koala Public License](<https://github.com/GoodClover/COCK-Public-License/blob/main/LICENSE.md>)
+[DBAD Public License](https://github.com/philsturgeon/dbad/blob/master/LICENSE.md)
 
 (Look, I doubt anyone other than myself will ever use/host this code.
 If you really don't like the license then message me for explicit permisson or something, I'll likely do it.)
