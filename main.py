@@ -638,7 +638,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
 
 ### Show Map ###
 @slash.slash(
-    name="mapURL",
+    name="showmap",
     description="Show the map of an area from URL fragment.",
     guild_ids=guild_ids,
     options=[
@@ -650,7 +650,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
         )
     ],
 )  # type: ignore
-async def map_command_url(ctx: SlashContext, URL: str) -> None:
+async def showmap_command(ctx: SlashContext, URL: str) -> None:
 
     try:
         zoom_int, lat_deg, lon_deg = frag_to_bits(URL)
