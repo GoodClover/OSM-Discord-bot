@@ -1,4 +1,5 @@
 from __future__ import annotations
+from inspect import indentsize
 
 from typing import Any, Iterable, Union
 
@@ -259,8 +260,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     for extra in extras_list:
         if extra != "" and extra not in ["info", "tags", "members"]:
             await ctx.send(
-                f"Unrecognised extra `{extra}`.\nPlease choose from `info`, `tags` and `members`.",
-                hidden=True,
+                f"Unrecognised extra `{extra}`.\nPlease choose from `info`, `tags` and `members`.", hidden=True
             )
             return
 
@@ -268,58 +268,71 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
         await ctx.send("Cannot show `members` of non-relation element.", hidden=True)
         return
 
+    try:
+        elm = get_elm(elm_type, elm_id)
+    except ValueError:
+        await ctx.send(f"{elm_type.capitalize()} `{elm_id}` not found.", hidden=True)
+        return
+
     await ctx.defer()
-    await ctx.send(embed=elm_embed(elm_type, str(elm_id), extras_list))
+    await ctx.send(embed=elm_embed(elm, extras_list))
 
 
-def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
+def get_elm(elm_type: str, elm_id: str | int) -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json")
-    elm = res.json()["elements"][0]
 
-    #### Embed ####
+    try:
+        elm = res.json()["elements"][0]
+    except (json.decoder.JSONDecodeError, IndexError, KeyError):
+        raise ValueError(f"Element `{elm_type}` `{elm_id}` not found")
+
+    return elm
+
+
+def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
 
-    embed.url = config["site_url"] + elm_type + "/" + elm_id
+    embed.url = config["site_url"] + elm["type"] + "/" + str(elm["id"])
 
     embed.set_footer(
         text=config["copyright_notice"],
         icon_url=config["icon_url"],
     )
 
-    embed.set_thumbnail(url=config["symbols"][elm_type])
+    embed.set_thumbnail(url=config["symbols"][elm["type"]])
 
     embed.timestamp = str_to_date(elm["timestamp"])
 
     # embed.set_author(name=elm["user"], url=config["site_url"] + "user/" + elm["user"])
 
-    embed.title = elm_type.capitalize() + ": "
+    embed.title = elm["type"].capitalize() + ": "
     if "tags" in elm:
         key, name = get_languaged_tag(elm["tags"], "name")
     else:
         name = None
     if name:
-        embed.title += f"{name} ({elm_id})"
+        embed.title += f"{name} ({elm['id']})"
     else:
-        embed.title += elm_id
+        embed.title += str(elm["id"])
 
-    if elm_type == "node":
+    if elm["type"] == "node":
         embed.description = f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)\n"
     else:
         embed.description = ""
 
     embed.description += (
-        f"[Edit](<https://www.osm.org/edit?{elm_type}={elm_id}>)"
+        f"[Edit](<https://www.osm.org/edit?{elm['type']}={elm['id']}>)"
         " • "
-        f"[Level0](<http://level0.osmz.ru/?url={elm_type}/{elm_id}>)"
+        f"[Level0](<http://level0.osmz.ru/?url={elm['type']}/{elm['id']}>)"
         "\n"
-        f"[OSM History Viewer](<https://pewu.github.io/osm-history/#/{elm_type}/{elm_id}>)"
+        f"[OSM History Viewer](<https://pewu.github.io/osm-history/#/{elm['type']}/{elm['id']}>)"
         " • "
         # Note: https://aleung.github.io/osm-visual-history is basically identical, but has some minor fixes missing.
         # I'm using "Visual History" as the name, despite linking to deep history, as it decribes it's function better.
-        f"[Visual History](<https://osmlab.github.io/osm-deep-history/#/{elm_type}/{elm_id}>)"
+        f"[Visual History](<https://osmlab.github.io/osm-deep-history/#/{elm['type']}/{elm['id']}>)"
         " • "
-        f"[Mapki/Deep Diff](<http://osm.mapki.com/history/{elm_type}.php?id={elm_id}>)"
+        f"[Mapki/Deep Diff](<http://osm.mapki.com/history/{elm['type']}.php?id={elm['id']}>)"
     )
 
     # ? Maybe make it read `colour=` tags for some extra pop?
@@ -346,7 +359,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
         )
         embed.add_field(name="Last editor", value=f"[{elm['user']}](<https://www.osm.org/user/{quote(elm['user'])}>)")
 
-        if elm_type == "node":
+        if elm["type"] == "node":
             # Discord dosen't appear to link the geo: URI :( I've left incase it gets supported at some time.
             embed.add_field(
                 name="Position (lat/lon)", value=f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
@@ -386,7 +399,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
             embed.add_field(name="Tags", value="*(no tags)*", inline=False)
 
     if "members" in extras:
-        if elm_type != "relation":
+        if elm["type"] != "relation":
             raise ValueError("Cannot show members of non-relation element.")
         if "members" in elm:
             text = "- " + "\n- ".join(
@@ -398,7 +411,7 @@ def elm_embed(elm_type: str, elm_id: str, extras: Iterable[str] = []) -> Embed:
                 ]
             )
             if len(text) > 1024:
-                text = f"Too many members to list.\n[View on OSM.org](https://osm.org/{elm_type}/{elm_id})"
+                text = f"Too many members to list.\n[View on OSM.org](https://osm.org/{elm['type']}/{elm['id']})"
             embed.add_field(name="Members", value=text, inline=False)
         else:
             embed.add_field(name="Members", value="*(no members)*", inline=False)
@@ -431,25 +444,32 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
 
     for extra in extras_list:
         if extra != "" and extra not in ["info", "tags"]:
-            await ctx.send(
-                f"Unrecognised extra `{extra}`.\nPlease choose from `info` and `tags`.",
-                hidden=True,
-            )
+            await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info` and `tags`.", hidden=True)
             return
 
+    try:
+        changeset = get_changeset(changeset_id)
+    except ValueError:
+        await ctx.send(f"Changeset `{changeset_id}` not found.", hidden=True)
+        return
+
     await ctx.defer()
-    await ctx.send(embed=changeset_embed(str(changeset_id), extras_list))
+    await ctx.send(embed=changeset_embed(changeset, extras_list))
 
 
-def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
-    res = requests.get(config["api_url"] + f"api/0.6/changeset/{changeset_id}.json")
-    changeset = res.json()["elements"][0]
+def get_changeset(changeset_id: str | int) -> dict:
+    """Shorthand for `get_elm("changeset", changeset_id)`"""
+    try:
+        return get_elm("changeset", changeset_id)
+    except ValueError:
+        raise ValueError(f"Changeset `{changeset_id}` not found")
 
-    #### Embed ####
+
+def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
 
-    embed.url = config["site_url"] + "changeset/" + changeset_id
+    embed.url = config["site_url"] + "changeset/" + str(changeset["id"])
 
     embed.set_footer(
         text=config["copyright_notice"],
@@ -463,7 +483,7 @@ def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
 
     embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + changeset["user"])
 
-    embed.title = "Changeset: " + changeset_id
+    embed.title = f"Changeset: {changeset['id']}"
 
     #### Description ####
     embed.description = ""
@@ -474,7 +494,7 @@ def changeset_embed(changeset_id: str, extras: Iterable[str] = []) -> Embed:
     else:
         embed.description += "*(no comment)*\n\n"
 
-    embed.description += f"[OSMCha](<https://osmcha.org/changesets/{changeset_id}>)"
+    embed.description += f"[OSMCha](<https://osmcha.org/changesets/{changeset['id']}>)"
 
     #### Image ####
     # * This would create significant stress to the OSM servers, so I don't reccomend it.
@@ -544,13 +564,16 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
             return
 
     try:
+        # Both will raise ValueError if the user isn't found, get_id_from_username will usually error first.
+        # In cases where the account was only removed recently, get_user will error.
         user_id = get_id_from_username(username)
+        user = get_user(user_id)
     except ValueError:
-        await ctx.send(f"User '{username}' not found.", hidden=True)
+        await ctx.send(f"User `{username}` not found.", hidden=True)
         return
 
     await ctx.defer()
-    await ctx.send(embed=user_embed(str(user_id), extras_list))
+    await ctx.send(embed=user_embed(user, extras_list))
 
 
 def get_id_from_username(username) -> int:
@@ -558,14 +581,21 @@ def get_id_from_username(username) -> int:
     if len(whosthat) > 0:
         return whosthat[0]["id"]
     else:
-        raise ValueError("User not found")
+        raise ValueError(f"User `{username}` not found")
 
 
-def user_embed(user_id: str, extras: Iterable[str] = []) -> Embed:
+def get_user(user_id: str | int) -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/user/{user_id}.json")
-    user = res.json()["user"]
 
-    #### Embed ####
+    try:
+        user = res.json()["user"]
+    except (json.decoder.JSONDecodeError, IndexError, KeyError):
+        raise ValueError(f"User `{user_id}` not found")
+
+    return user
+
+
+def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
 
@@ -725,19 +755,30 @@ async def on_message(msg: Message) -> None:
     if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
         return
 
+    # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
+
     async with msg.channel.typing():
         # Create the messages
         embeds: list[Embed] = []
         files: list[File] = []
 
         for elm_type, elm_id in elms:
-            embeds.append(elm_embed(elm_type, elm_id))
+            try:
+                embeds.append(elm_embed(get_elm(elm_type, elm_id)))
+            except ValueError:
+                pass
 
         for changeset_id in changesets:
-            embeds.append(changeset_embed(changeset_id))
+            try:
+                embeds.append(changeset_embed(get_changeset(changeset_id)))
+            except ValueError:
+                pass
 
         for username in users:
-            embeds.append(user_embed(str(get_id_from_username(username))))
+            try:
+                embeds.append(user_embed(get_user(get_id_from_username(username))))
+            except ValueError:
+                pass
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
