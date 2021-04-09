@@ -66,4 +66,3 @@ Allows people to post suggestions and vote with reactions in a set channel.
 `/close_suggestion <message-ID> <reason>` (Power people only)
 
 Allows suggestions to get accepted/rejected with a freeform reason.
-
