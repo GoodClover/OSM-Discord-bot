@@ -816,13 +816,25 @@ async def update_member_count(guild: Guild) -> None:
 
 
 ### Suggestions ###
-@slash.slash(name="suggest", description="Send a suggestion.", guild_ids=guild_ids)  # type: ignore
+@slash.slash(
+    name="suggest",
+    description="Send a suggestion.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="Suggestion",
+            description="Your suggestion, be sensible.",
+            option_type=3,
+            required=True,
+        )
+    ],
+)  # type: ignore
 async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
-    await ctx.defer(hidden=True)
-
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
+
+    await ctx.defer(hidden=True)
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
@@ -838,13 +850,52 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 """
     )
     await ctx.send(
-        f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>:"
+        f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>."
         + msg_to_link(sugg_msg),
         hidden=True,
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
     await sugg_msg.add_reaction(config["emoji"]["vote_abstain"])
     await sugg_msg.add_reaction(config["emoji"]["vote_no"])
+
+
+@slash.slash(
+    name="accept_suggestion",
+    description="Accept a suggestion. This can be run on already closed suggestions to change the result.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="ID",
+            description="The message ID of the suggestion. With developer mode on, right click the message → `Copy ID`",
+            option_type=3,
+            required=True,
+        ),
+        create_option(
+            name="result",
+            description="The result of the suggestion, e.g. `accepted`. Freeform value.",
+            option_type=3,
+            required=True,
+        )
+    ],
+)  # type: ignore
+async def accept_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
+    if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
+        await ctx.send("Suggestions are not enabled on this server.", hidden=True)
+        return
+    
+    if not ctx.guild.get_role(config["server_settings"][str(ctx.guild.id)]["power_role"]) in ctx.author.roles:
+        await ctx.send("You do not have permission to run this command.", hidden=True)
+        return
+
+    await ctx.defer(hidden=True)
+
+    suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
+
+    msg = await suggestion_chanel.fetch_message(msg_id)
+
+    sugg_msg = await msg.edit(content=msg.content.split("\n\n")[0] + f"\n\nVoting closed, result: **{result}**")
+
+    await ctx.send(f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}", hidden=True)
 
 
 ## MAIN ##
