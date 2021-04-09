@@ -15,6 +15,7 @@ from io import BytesIO
 
 import requests
 from dotenv import load_dotenv
+import discord
 from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashMessage
@@ -891,7 +892,16 @@ async def accept_suggestion_command(ctx: SlashContext, msg_id: int, result: str)
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
-    msg = await suggestion_chanel.fetch_message(msg_id)
+    try:
+        msg = await suggestion_chanel.fetch_message(msg_id)
+    except discord.errors.NotFound:
+        await ctx.send("Message not found. Likely an incorrect ID or it is not in the suggestion channel.", hidden=True)
+        return
+
+
+    if msg.author.id != client.user.id:
+        await ctx.send("I can't modify that message, as it was not created by me :P", hidden=True)
+        return
 
     sugg_msg = await msg.edit(content=msg.content.split("\n\n")[0] + f"\n\nVoting closed, result: **{result}**")
 
