@@ -100,6 +100,10 @@ def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
     return f"https://discord.com/channels/{msg.guild.id}/{msg.channel.id}/{msg.id}"
 
 
+def user_to_mention(user: User) -> str:
+    return f"<@{user.id}>"
+
+
 ## CLIENT ##
 
 
@@ -195,7 +199,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     # This is the last time taginfo updated:
     embed.timestamp = str_to_date(data["data_until"])
 
-    embed.set_author(name="taginfo", url=config["taginfo_url"] + "about")
+    # embed.set_author(name="taginfo", url=config["taginfo_url"] + "about")
 
     if data_wiki_en:
         embed.description = data_wiki_en["description"]
@@ -903,7 +907,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
         await ctx.send("I can't modify that message, as it was not created by me :P", hidden=True)
         return
 
-    sugg_msg = await msg.edit(content=msg.content.split("\n\n")[0] + f"\n\nVoting closed, result: **{result}**")
+    sugg_msg = await msg.edit(content=msg.content.split("\n\n")[0] + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{result}**")
 
     await ctx.send(f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}", hidden=True)
 
