@@ -106,7 +106,7 @@ def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
 @client.event  # type: ignore
 async def on_ready() -> None:
     print(f"{client.user} is connected to the following guilds:\n")
-    print("\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
+    print(" - " + "\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
 # Google Bad
