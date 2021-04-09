@@ -23,30 +23,11 @@ from PIL import Image
 
 ## SETUP ##
 
-ELM_TYPES_FL = {
-    "n": "node",
-    "w": "way",
-    "r": "relation",
-}
-TYPES_FL = {
-    "n": "node",
-    "nd": "node",
-    "w": "way",
-    "r": "relation",
-    "c": "changeset",
-    "cs": "changeset",
-    "u": "user",
-}
-NL = "\n"  # This is used as you can't put \n in an f-string expression.
-
 # Regex
 SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
-
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
 
 
 def load_config() -> None:
@@ -804,7 +785,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
-    suggestion = suggestion.replace(NL, NL + "> ").replace("@", "�")
+    suggestion = suggestion.replace("\n", "\n> ").replace("@", "�")
 
     sugg_msg = await suggestion_chanel.send(
         f"""
@@ -828,4 +809,5 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 ## MAIN ##
 
 if __name__ == "__main__":
-    client.run(TOKEN)
+    load_dotenv()
+    client.run(os.getenv("DISCORD_TOKEN"))
