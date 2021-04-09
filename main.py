@@ -861,8 +861,8 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
 
 
 @slash.slash(
-    name="accept_suggestion",
-    description="Accept a suggestion. This can be run on already closed suggestions to change the result.",
+    name="close_suggestion",
+    description="Closes a suggestion. This can be run on already closed suggestions to change the result.",
     guild_ids=guild_ids,
     options=[
         create_option(
@@ -879,7 +879,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
         )
     ],
 )  # type: ignore
-async def accept_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
+async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
