@@ -20,7 +20,7 @@ Embedding of elmenents, users and changesets also works by putting the following
 ### `config.json`
 
 Most of the config lives here.
-I can't be bothered to list it, so just look at the [sameple config](sample_config.json) for now.
+I can't be bothered to list it, so just look at the [sample config](sample_config.json) for now.
 
 ### `.env` file
 
