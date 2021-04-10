@@ -100,7 +100,7 @@ def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
     return f"https://discord.com/channels/{msg.guild.id}/{msg.channel.id}/{msg.id}"
 
 
-def user_to_mention(user: User) -> str:
+def user_to_mention(user: Member) -> str:
     return f"<@{user.id}>"
 
 
@@ -486,7 +486,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
 
     embed.timestamp = str_to_date(changeset["closed_at"])
 
-    embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + changeset["user"])
+    embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + quote(changeset["user"]))
 
     embed.title = f"Changeset: {changeset['id']}"
 
@@ -604,7 +604,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
 
-    embed.url = config["site_url"] + "user/" + user["display_name"]
+    embed.url = config["site_url"] + "user/" + quote(user["display_name"])
 
     embed.set_footer(
         text=config["copyright_notice"],
