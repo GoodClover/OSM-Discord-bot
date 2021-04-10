@@ -78,6 +78,12 @@ def str_to_date(text: str) -> datetime:
     return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
 
 
+def sanitise(text: str) -> str:
+    """Make user input safe to just copy."""
+    text = text.replace("@", "�")
+    return text
+
+
 def get_languaged_tag(
     tags: dict[str, str],
     tag: str,
@@ -852,7 +858,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
-    suggestion = suggestion.replace("\n", "\n> ").replace("@", "�")
+    suggestion = sanitise(suggestion).replace("\n", "\n> ")
 
     sugg_msg = await suggestion_chanel.send(
         f"""
@@ -917,7 +923,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{result}**"
+        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{sanitise(result)}**"
     )
 
     await ctx.send(
