@@ -751,6 +751,15 @@ async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
+    #### Try my commands, those are gone ####
+    if msg.content.startswith("?josmtip"):
+        await msg.channel.send("Try `/josmtip` :thinking:")
+    elif msg.content.startswith("?googlebad"):
+        await msg.channel.send("Try `/googlebad` :wink:")
+    elif msg.content.startswith("€showmap"):
+        await msg.channel.send("Try `/showmap` :map:")
+
+    #### Inline linking ####
     # Find matches
     elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
     changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
@@ -880,14 +889,14 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
             description="The result of the suggestion, e.g. `accepted`. Freeform value.",
             option_type=3,
             required=True,
-        )
+        ),
     ],
 )  # type: ignore
 async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
-    
+
     if not ctx.guild.get_role(config["server_settings"][str(ctx.guild.id)]["power_role"]) in ctx.author.roles:
         await ctx.send("You do not have permission to run this command.", hidden=True)
         return
@@ -902,14 +911,19 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
         await ctx.send("Message not found. Likely an incorrect ID or it is not in the suggestion channel.", hidden=True)
         return
 
-
     if msg.author.id != client.user.id:
         await ctx.send("I can't modify that message, as it was not created by me :P", hidden=True)
         return
 
-    sugg_msg = await msg.edit(content=msg.content.split("\n\n")[0] + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{result}**")
+    sugg_msg = await msg.edit(
+        content=msg.content.split("\n\n")[0]
+        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{result}**"
+    )
 
-    await ctx.send(f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}", hidden=True)
+    await ctx.send(
+        f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}",
+        hidden=True,
+    )
 
 
 ## MAIN ##
