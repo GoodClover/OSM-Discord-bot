@@ -611,14 +611,19 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
 
-    embed.url = config["site_url"] + "user/" + quote(user["display_name"])
+    url_safe_user = quote(user["display_name"])
+
+    embed.url = config["site_url"] + "user/" + url_safe_user
 
     embed.set_footer(
         text=config["copyright_notice"],
         icon_url=config["icon_url"],
     )
 
-    embed.set_thumbnail(url=user["img"]["href"])
+    if "img" in user:
+        embed.set_thumbnail(url=user["img"]["href"])
+    else:
+        embed.set_thumbnail(url=config["symbols"]["user"])
 
     # embed.timestamp = datetime.now()
     # embed.timestamp = str_to_date(user["account_created"])
@@ -626,9 +631,9 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     embed.title = "User: " + user["display_name"]
 
     embed.description = (
-        f"[HDYC](<https://hdyc.neis-one.org/?{user['display_name']}>)"
+        f"[HDYC](<https://hdyc.neis-one.org/?{url_safe_user}>)"
         " • "
-        f"[YOSMHM](<https://yosmhm.neis-one.org/?{user['display_name']}>)"
+        f"[YOSMHM](<https://yosmhm.neis-one.org/?{url_safe_user}>)"
     )
 
     #### Fields ####

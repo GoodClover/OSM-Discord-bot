@@ -23,7 +23,8 @@
         "relation": "https://wiki.openstreetmap.org/w/images/thumb/4/48/Osm_element_relation.svg/256px-Osm_element_relation.svg.png",
         "key": "https://wiki.openstreetmap.org/w/images/thumb/2/29/Osm_element_key.svg/256px-Osm_element_key.svg.png",
         "tag": "https://wiki.openstreetmap.org/w/images/thumb/5/5f/Osm_element_tag.svg/256px-Osm_element_tag.svg.png",
-        "value": "https://wiki.openstreetmap.org/w/images/thumb/f/fd/Osm_element_value.svg/256px-Osm_element_value.svg.png"
+        "value": "https://wiki.openstreetmap.org/w/images/thumb/f/fd/Osm_element_value.svg/256px-Osm_element_value.svg.png",
+        "user": "https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/master/app/assets/images/avatar_large.png"
     },
     "emoji": {
         "vote_yes": "\ud83d\udc4d",
