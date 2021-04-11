@@ -84,15 +84,16 @@ def sanitise(text: str) -> str:
     return text
 
 
-def get_languaged_tag(
+def get_suffixed_tag(
     tags: dict[str, str],
-    tag: str,
-    suffix: str = ":en",
+    key: str,
+    suffix: str,
 ) -> tuple[str, str] | tuple[None, None]:
-    if (k := (tag + suffix)) in tags:
-        return k, tags[k]
-    elif tag in tags:
-        return tag, tags[tag]
+    suffixed_key = key + suffix
+    if suffixed_key in tags:
+        return suffixed_key, tags[suffixed_key]
+    elif key in tags:
+        return key, tags[key]
     else:
         return None, None
 
@@ -319,7 +320,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
     embed.title = elm["type"].capitalize() + ": "
     if "tags" in elm:
-        key, name = get_languaged_tag(elm["tags"], "name")
+        key, name = get_suffixed_tag(elm["tags"], "name", ":en")
     else:
         name = None
     if name:
@@ -394,7 +395,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
             # "description", "inscription"
             for key in ["note", "FIXME", "fixme"]:
-                key_languaged, value = get_languaged_tag(elm["tags"], "note")
+                key_languaged, value = get_suffixed_tag(elm["tags"], "note", ":en")
                 if value:
                     elm["tags"].pop(key_languaged)
                     embed.add_field(name=key.capitalize(), value="> " + value, inline=False)
