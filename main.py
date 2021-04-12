@@ -301,6 +301,75 @@ def get_elm(elm_type: str, elm_id: str | int) -> dict:
     return elm
 
 
+def elms_to_render(elem_type='relation', elem_id='60189'):
+    # Default value uses russia as example
+    # Possible alternative is creating very rough rendering on bot-side. 
+    # Using overpass to query just geometry. Such as (for Sweden)
+    # [out:json];relation(52822);out skel geom;
+    # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
+    # Even easier alternative is drawing bounding box
+    # Test
+    elem_type='relation'
+    elem_id='60189'  # Russia
+    result=api.query('[out:json][timeout:15];'+elem_type+'('+elem_id+');out skel geom;')
+    simplified_geometry=list()
+    # Since we are querying for single element, top level result will have just 1 element.
+    node_count=0
+    if elem_type=='relation':
+        segments=[]
+        seg_ends=dict()
+        elems=result.relations[0].members
+        prev_last=None
+        # Count number of nodes
+        for i in range(len(elems)):
+            # Merges some ways together. For russia around 4000 ways became 34 segments.
+            if elems[i].role not in ['inner','outer']:
+                continue
+            first=(float(elems[i].geometry[0].lat), float(elems[i].geometry[0].lon))
+            last=(float(elems[i].geometry[-1].lat), float(elems[i].geometry[-1].lon))
+            # Adding and removing elements is faster at end of list
+            if first in seg_ends:
+                # Append current segment to end of existing one
+                segments[seg_ends[first]]+=elems[i].geometry[1:]
+                seg_ends[last]=seg_ends[first]
+                del seg_ends[first]
+            elif last in seg_ends:
+                # Append current segment to beginning of existing one
+                segments[seg_ends[last]]+=elems[i].geometry[:-1]
+                seg_ends[first]=seg_ends[last]
+                del seg_ends[last]
+            else:
+                # Create new segment
+                segments.append(elems[i].geometry)
+                seg_ends[last]=len(segments)-1
+                seg_ends[first]=len(segments)-1
+            # This approach has potential error in case some parts of border are reversed.
+    if elem_type=='way':
+        segments=[]  # Simplified variant of relations' code
+        elems=result.ways[0]
+        segments.append(elems.get_nodes(True))
+    if elem_type=='node':
+        segments=[[result.nodes[0]]]
+    calc_limit=lambda x: x if x<50 else int((x-50)**0.5+50)
+    for seg_num in range(len(segments)):
+        segment=segments[seg_num]
+        seg_len=len(segment)
+        limit=calc_limit(seg_len)
+        step=seg_len/limit
+        position=0
+        temp_array=[]
+        while position < seg_len:
+            temp_array.append(segment[int(position)])
+            position+=step
+        if int(position-step)!=seg_len-1:
+            temp_array.append(segment[-1])
+        segments[seg_num]=list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
+    
+    # We now have list of lists of (lat, lon) coordinates to be rendered.
+    # These lists of segments can be joined, if multiple elements are requested
+    return segments
+
+
 def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
@@ -360,6 +429,9 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     #     "&scale=1800&format=png"
     # )
     # embed.set_image(url=img_url)
+    
+    # segments=elms_to_render()
+
 
     #### Fields ####
     if "info" in extras:
