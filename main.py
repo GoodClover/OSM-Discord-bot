@@ -912,7 +912,7 @@ async def on_message(msg: Message) -> None:
                 await msg.channel.send(file=file)
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
-            await msg.channel.send(f"Error occured while processing {element_type}/{element_id}.")
+            await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
 
 
 ### Member count ###
