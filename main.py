@@ -877,6 +877,14 @@ async def get_image_cluster(
     return File("data/cluster.png")
 
 
+@client.event  # type: ignore
+async def on_reaction_add(reaction,user) -> None:
+    waste_basket='\U0001F5D1'
+    if reaction.message.author!=client.user or str(reaction.emoji)!=waste_basket:
+        return
+    reaction.message.delete
+
+
 ### Inline linking ###
 ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
