@@ -868,7 +868,7 @@ async def on_message(msg: Message) -> None:
     # Run queries
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-
+    errorlog=[]
     async with msg.channel.typing():
         # Create the messages
         embeds: list[Embed] = []
@@ -879,20 +879,20 @@ async def on_message(msg: Message) -> None:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
                 except ValueError:
-                    pass
+                    errorlog.append((elm_type, elm_id))
 
         for changeset_ids in changesets:
             for changeset_id in changeset_ids:
                 try:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
-                    pass
+                    errorlog.append((elm_type, elm_id))
 
         for username in users:
             try:
                 embeds.append(user_embed(get_user(get_id_from_username(username))))
             except ValueError:
-                pass
+                errorlog.append(('user', username))
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
@@ -910,6 +910,9 @@ async def on_message(msg: Message) -> None:
             await msg.channel.send(file=files[0], reference=msg)
             for file in files[1:]:
                 await msg.channel.send(file=file)
+        if len(errorlog) > 0:
+            for element_type, element_id in errorlog:
+            await msg.channel.send(f"Error occured while processing {element_type}/{element_id}.")
 
 
 ### Member count ###
