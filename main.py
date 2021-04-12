@@ -823,8 +823,8 @@ async def get_image_cluster(
 
 
 ### Inline linking ###
-ELM_INLINE_REGEX = rf"{SS}(?:node|way|relation)\/{POS_INT}{SE}"
-CHANGESET_INLINE_REGEX = rf"{SS}changeset\/{POS_INT}{SE}"
+ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
@@ -845,13 +845,27 @@ async def on_message(msg: Message) -> None:
 
     #### Inline linking ####
     # Find matches
-    elms = [elm.split("/") for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
-    changesets = [thing.split("/")[1] for thing in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
+    elms = [(elm[0], tuple(re.findall('\d+', elm[1]))) for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)
+    changesets = [tuple(re.findall('\d+', elm[1])) for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
     map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
     if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
         return
+
+    # Ask user confirmation by reacting with :mag_right: emoji.
+    reaction_string='\U0001f50e'  # :mag_right:
+    await msg.add_reaction(reaction_string)
+    def check(reaction, user_obj):
+        return user_obj == msg.author and str(reaction.emoji) == reaction_string
+    try:
+        reaction, user_obj = await client.wait_for('reaction_add', timeout=15.0, check=check)
+    except asyncio.TimeoutError:  # User didn't respond
+        await message.clear_reaction(reaction_string)
+        return 
+    else:  # User responded
+        await message.clear_reaction(reaction_string)
+    # Run queries
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
 
@@ -860,17 +874,19 @@ async def on_message(msg: Message) -> None:
         embeds: list[Embed] = []
         files: list[File] = []
 
-        for elm_type, elm_id in elms:
-            try:
-                embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-            except ValueError:
-                pass
+        for elm_type, elm_ids in elms:
+            for elm_id in elm_ids:
+                try:
+                    embeds.append(elm_embed(get_elm(elm_type, elm_id)))
+                except ValueError:
+                    pass
 
-        for changeset_id in changesets:
-            try:
-                embeds.append(changeset_embed(get_changeset(changeset_id)))
-            except ValueError:
-                pass
+        for changeset_ids in changesets:
+            for changeset_id in changeset_ids:
+                try:
+                    embeds.append(changeset_embed(get_changeset(changeset_id)))
+                except ValueError:
+                    pass
 
         for username in users:
             try:
