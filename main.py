@@ -795,8 +795,13 @@ def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     lat_rad = math.radians(lat_deg)
     n = 2.0 ** zoom
     xtile = int((lon_deg + 180.0) / 360.0 * n)
+    # Sets safety bounds on vertical tile range.
+    if lat_deg>=89:
+        return (xtile,0)
+    if lat_deg<=-89:
+        return (xtile,n-1)
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
-    return (xtile, ytile)
+    return (xtile, max(min(n-1,ytile),0))
 
 
 HEADERS = {
@@ -809,7 +814,7 @@ HEADERS = {
 }
 
 
-async def get_image_cluster(
+async def get_image_cluster_old(
     lat_deg: float,
     lon_deg: float,
     zoom: int,
@@ -831,6 +836,39 @@ async def get_image_cluster(
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
                 Cluster.paste(tile, box=((xtile - xmin) * 256, (ytile - ymin) * 255))
+                i = i + 1
+            except Exception as e:
+                print(e)
+        j = j + 1
+    Cluster.save("data/cluster.png")
+    return File("data/cluster.png")
+
+
+async def get_image_cluster(
+    lat_deg: float,
+    lon_deg: float,
+    zoom: int,
+    tile_url: str = config["tile_url"],
+) -> File:
+    # Rewrite of https://github.com/ForgottenHero/mr-maps
+    tile_w, tile_h = 256, 256
+    tiles_x, tiles_y = 5, 5
+    center_x, center_y=deg2tile(lat_deg, lon_deg, zoom)
+    xmin, xmax=center_x-int(tiles_x/2), center_x+int(tiles_x/2)
+    n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
+    if tiles_x%2==0: xmax-=1
+    ymin, ymax=center_y-int(tiles_y/2), center_y+int(tiles_y/2)
+    if tiles_y%2==0: ymax-=1
+    ymin=max(ymin,0)  # Sets vertical limits to area.
+    ymax=min(ymax, n)
+    Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
+    for xtile in range(xmin, xmax + 1):
+        xtile=xtile%n  # Repeats tiles across -180/180 meridian.
+        for ytile in range(ymin, ymax + 1):
+            try:
+                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
+                tile = Image.open(BytesIO(res.content))
+                Cluster.paste(tile, box=((xtile - xmin) * tile_w, (ytile - ymin) * tile_h))
                 i = i + 1
             except Exception as e:
                 print(e)
