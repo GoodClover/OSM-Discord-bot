@@ -878,7 +878,7 @@ async def get_image_cluster(
 
 
 ### Inline linking ###
-ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
@@ -900,26 +900,33 @@ async def on_message(msg: Message) -> None:
 
     #### Inline linking ####
     # Find matches
-    elms = [(elm[0], tuple(re.findall('\d+', elm[1]))) for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)
-    changesets = [tuple(re.findall('\d+', elm[1])) for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)
+    # elm[0] - element type (node/way/relation/changeset)
+    # elm[1] - separator used
+    # elm[2] - element ID
+    elms = [(elm[0], tuple(re.findall('\d+', elm[2])), elm[1]) for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
+    changesets = [tuple(re.findall('\d+', elm[2]), elm[1]) for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
     map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
     if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
         return
-
+    ask_confirmation = False
+    for match in elms+changesets:
+        if match[2]!='/':  # Found case when user didn't use standard node/123 format
+            ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
-    reaction_string='\U0001f50e'  # :mag_right:
-    await msg.add_reaction(reaction_string)
-    def check(reaction, user_obj):
-        return user_obj == msg.author and str(reaction.emoji) == reaction_string
-    try:
-        reaction, user_obj = await client.wait_for('reaction_add', timeout=15.0, check=check)
-    except asyncio.TimeoutError:  # User didn't respond
-        await message.clear_reaction(reaction_string)
-        return 
-    else:  # User responded
-        await message.clear_reaction(reaction_string)
+    if ask_confirmation:
+        reaction_string='\U0001f50e'  # :mag_right:
+        await msg.add_reaction(reaction_string)
+        def check(reaction, user_obj):
+            return user_obj == msg.author and str(reaction.emoji) == reaction_string
+        try:
+            reaction, user_obj = await client.wait_for('reaction_add', timeout=15.0, check=check)
+        except asyncio.TimeoutError:  # User didn't respond
+            await message.clear_reaction(reaction_string)
+            return 
+        else:  # User responded
+            await message.clear_reaction(reaction_string)
     # render_queue list[list[tuple[float]]] = []
     
 
