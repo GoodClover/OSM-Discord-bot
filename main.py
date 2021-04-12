@@ -878,14 +878,20 @@ async def get_image_cluster(
 
 
 @client.event  # type: ignore
-async def on_reaction_add(reaction,user) -> None:
+async def on_raw_reaction_add(payload) -> None:
     # Probably needs testing. It should maybe remove bot's own message, 
-    # if someone reacts with waste backet emoji
-    # For safety reasons, it should also authenticate reacting user 
-    waste_basket='\U0001F5D1'
-    if reaction.message.author!=client.user or str(reaction.emoji)!=waste_basket:
+    # if someone reacts with wastebasket emoji
+    # For safety reasons, it should also authenticate reacting user
+    # Currently anyone can delete bot's message.
+    waste_basket=b'\xf0\x9f\x97\x91\xef\xb8\x8f'
+    if (payload.emoji.name.encode('utf8')!=waste_basket):
         return
-    reaction.message.delete
+    # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
+    msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
+    # Safety check
+    if (msg.author!=client.user and msg.author!=payload.member):
+        return
+    await msg.delete()
 
 
 ### Inline linking ###
