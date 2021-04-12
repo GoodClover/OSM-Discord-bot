@@ -879,6 +879,9 @@ async def get_image_cluster(
 
 @client.event  # type: ignore
 async def on_reaction_add(reaction,user) -> None:
+    # Probably needs testing. It should maybe remove bot's own message, 
+    # if someone reacts with waste backet emoji
+    # For safety reasons, it should also authenticate reacting user 
     waste_basket='\U0001F5D1'
     if reaction.message.author!=client.user or str(reaction.emoji)!=waste_basket:
         return
