@@ -22,6 +22,7 @@ from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
 from PIL import Image
 
+import overpy
 
 ## SETUP ##
 
@@ -303,16 +304,12 @@ def get_elm(elm_type: str, elm_id: str | int) -> dict:
 
 def elms_to_render(elem_type='relation', elem_id='60189'):
     # Default value uses russia as example
-    # Possible alternative is creating very rough rendering on bot-side. 
+    # Possible alternative approach to rendering is creating very rough drawing on bot-side. 
     # Using overpass to query just geometry. Such as (for Sweden)
-    # [out:json];relation(52822);out skel geom;
     # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
     # Even easier alternative is drawing bounding box
-    # Test
-    elem_type='relation'
-    elem_id='60189'  # Russia
-    result=api.query('[out:json][timeout:15];'+elem_type+'('+elem_id+');out skel geom;')
-    simplified_geometry=list()
+    overpass_api = overpy.Overpass()
+    result=overpass_api.query('[out:json][timeout:15];'+elem_type+'('+elem_id+');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count=0
     if elem_type=='relation':
@@ -320,10 +317,10 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
         seg_ends=dict()
         elems=result.relations[0].members
         prev_last=None
-        # Count number of nodes
+        # Merges some ways together. For russia around 4000 ways became 34 segments.
         for i in range(len(elems)):
-            # Merges some ways together. For russia around 4000 ways became 34 segments.
             if elems[i].role not in ['inner','outer']:
+                # Skip elements based on role... May cause a bug.
                 continue
             first=(float(elems[i].geometry[0].lat), float(elems[i].geometry[0].lon))
             last=(float(elems[i].geometry[-1].lat), float(elems[i].geometry[-1].lon))
@@ -343,30 +340,37 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
                 segments.append(elems[i].geometry)
                 seg_ends[last]=len(segments)-1
                 seg_ends[first]=len(segments)-1
-            # This approach has potential error in case some parts of border are reversed.
+            # This approach has potential error in case some ways of relation are reversed.
     if elem_type=='way':
         segments=[]  # Simplified variant of relations' code
         elems=result.ways[0]
         segments.append(elems.get_nodes(True))
     if elem_type=='node':
+        # Just creates a single-node segment.
         segments=[[result.nodes[0]]]
-    calc_limit=lambda x: x if x<50 else int((x-50)**0.5+50)
+    Limiter_offset=50
+    Reduction_factor=2
+    # Relative simple way to reduce nodes by just picking every n-th node.
+    # Ignores ways with less than 50 nodes.
+    calc_limit=lambda x: x if x<Limiter_offset else int((x-Limiter_offset)**(1/Reduction_factor)+Limiter_offset)
     for seg_num in range(len(segments)):
-        segment=segments[seg_num]
+        segment=segments[seg_num]  # For each segment
         seg_len=len(segment)
-        limit=calc_limit(seg_len)
-        step=seg_len/limit
+        limit=calc_limit(seg_len)  # Get number of nodes allowed
+        step=seg_len/limit         # Average number of nodes to be skipped
         position=0
         temp_array=[]
-        while position < seg_len:
-            temp_array.append(segment[int(position)])
-            position+=step
-        if int(position-step)!=seg_len-1:
-            temp_array.append(segment[-1])
+        while position < seg_len:  # Iterates over segment
+            temp_array.append(segment[int(position)])  # And select only every step-th node
+            position+=step   # Using int(position) because step is usually float.
+        if int(position-step)!=seg_len-1:   # Always keep last node,
+            temp_array.append(segment[-1])  # But only if it's not added already.
+        # Convert overpy-node-objects into (lat, lon) pairs.
         segments[seg_num]=list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
     
     # We now have list of lists of (lat, lon) coordinates to be rendered.
     # These lists of segments can be joined, if multiple elements are requested
+    # In order to add support for colours, just create segment-colour pairs.
     return segments
 
 
