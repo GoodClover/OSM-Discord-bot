@@ -308,8 +308,9 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
     # Using overpass to query just geometry. Such as (for Sweden)
     # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
     # Even easier alternative is drawing bounding box
+    # Throws IndexError if element was not found
     overpass_api = overpy.Overpass()
-    result=overpass_api.query('[out:json][timeout:15];'+elem_type+'('+elem_id+');out skel geom;')
+    result=overpass_api.query('[out:json][timeout:15];'+elem_type+'('+str(elem_id)+');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count=0
     if elem_type=='relation':
@@ -372,6 +373,18 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
     # These lists of segments can be joined, if multiple elements are requested
     # In order to add support for colours, just create segment-colour pairs.
     return segments
+
+
+def get_render_queue_bounds(queue):
+    min_lat, max_lat, min_lon, max_lat=90,-90,180,-180
+    for segment in queue:
+        for coordinates in segment:
+            lat, lon=coordinates
+            if lat > max_lat: max_lat=lat
+            if lat < min_lat: min_lat=lat
+            if lon > max_lon: max_lon=lon
+            if lon < min_lon: min_lon=lon
+    return (min_lat, max_lat, min_lon, max_lat)
 
 
 def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
@@ -869,21 +882,27 @@ async def on_message(msg: Message) -> None:
         return 
     else:  # User responded
         await message.clear_reaction(reaction_string)
-    # Run queries
+    # render_queue list[list[tuple[float]]] = []
+    
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-    errorlog=[]
+    
     async with msg.channel.typing():
         # Create the messages
         embeds: list[Embed] = []
         files: list[File] = []
+        errorlog: list[Str] = []
 
         for elm_type, elm_ids in elms:
             for elm_id in elm_ids:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
+                    # render_queue += elms_to_render(elm_type, elm_id)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
+        #if render_queue:
+        #    get_render_queue_bounds(render_queue)
+        # Next step is to calculate map area for render.
 
         for changeset_ids in changesets:
             for changeset_id in changeset_ids:
@@ -909,8 +928,8 @@ async def on_message(msg: Message) -> None:
                 await msg.channel.send(embed=embed)
             for file in files:
                 await msg.channel.send(file=file)
-
-        elif len(files) > 0:
+        # Due to possible future addition of rendering, files and embeds should not exclude each other.
+        if len(files) > 0:
             await msg.channel.send(file=files[0], reference=msg)
             for file in files[1:]:
                 await msg.channel.send(file=file)
