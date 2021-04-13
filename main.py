@@ -21,6 +21,7 @@ from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
 from PIL import Image
+from PIL import ImageDraw  # For drawing elements
 
 try:
     import overpy
@@ -844,6 +845,31 @@ def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     return (xtile, max(min(n-1,ytile),0))
 
 
+def tile2deg(zoom, x, y):
+    # Gets top-left coordinate of tile.
+    lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
+    lat_rad =  2 * math.atan(math.exp(lat_rad)) - math.pi/2
+    lat = lat_rad * 180.0 / math.pi
+    # Handling latitude out of range is not necessarry 
+    # longitude maps linearly to map, so we simply scale:
+    lng = -180.0 + (360.0*x/(2**zoom)%360)
+    return (lat, lng)
+
+def deg2tile_float(lat_deg, lon_deg, zoom):
+    # This is not really supposed to work, but it works.
+    # By removing rounding down from deg2tile function, we can estimate 
+    # position where to draw coordinates during element export.
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = (lon_deg + 180.0) / 360.0 * n
+    # Sets safety bounds on vertical tile range.
+    if lat_deg>=89:
+        return (xtile,0)
+    if lat_deg<=-89:
+        return (xtile,n-1)
+    ytile = (1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n
+    return (xtile, max(min(n-1,ytile),0))
+
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
     "Accept": "image/png",
@@ -919,6 +945,21 @@ async def get_image_cluster(
         j = j + 1
     Cluster.save("data/cluster.png")
     return File("data/cluster.png"), errorlog
+
+
+
+def render_elms_on_file(file, render_queue, frag):
+    # Inputs:   File - unknown
+    #           render_queue - [[(lat, lon), ...], ...]
+    #           ~~bbox~~ - (min_lat, max_lat, min_lon, max_lon)
+    #           frag  - zoom, lat, lon used  for cluster rendering input.
+    # Renderer requires epsg 3587 crs converter.
+    min_lat, max_lat, min_lon, max_lon = bbox  # Bbox of render_queue, not map file.
+    # Use solution similar to get_image_cluster, but use deg2tile_float function to get xtile/ytile.
+    
+    # I think tile calculation should be separate from get_image_cluster.
+    
+    pass
 
 
 @client.event  # type: ignore
@@ -1009,17 +1050,18 @@ async def on_message(msg: Message) -> None:
             for elm_id in elm_ids:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    # render_queue += elms_to_render(elm_type, elm_id)
+                    #render_queue += elms_to_render(elm_type, elm_id)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
         # Next step is to calculate map area for render.
         if render_queue:
             #map_frag=bits_to_frag(calc_preview_area(get_render_queue_bounds(render_queue)))
-            zoom, lat, lon = calc_preview_area(get_render_queue_bounds(render_queue))
+            bbox=get_render_queue_bounds(render_queue)
+            zoom, lat, lon = calc_preview_area(bbox)
             #file, errors=await get_image_cluster(lat, lon, zoom)
             #errorlog+=errors
-            #render_elms_on_file(file, render_queue)
+            #render_elms_on_file(file, render_queue, (zoom, lat, lon))
             #files.append(file)
 
         for changeset_ids in changesets:
