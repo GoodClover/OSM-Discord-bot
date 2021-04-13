@@ -306,10 +306,11 @@ def get_elm(elm_type: str, elm_id: str | int) -> dict:
     return elm
 
 
-def elms_to_render(elem_type='relation', elem_id='60189'):
+def elms_to_render(elem_type, elem_id):
     # Default value uses russia as example
+    # Example: elms_to_render('relation', '60189')  (Russia)
     # Possible alternative approach to rendering is creating very rough drawing on bot-side.
-    # Using overpass to query just geometry. Such as (for Sweden)
+    # Using overpass to query just geometry.
     # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
     # Even easier alternative is drawing bounding box
     # Throws IndexError if element was not found
@@ -412,9 +413,9 @@ def calc_preview_area(queue_bounds):
     tiles_x, tiles_y = 5, 5
     delta_lat=max_lat-min_lat
     delta_lon=max_lon-min_lon
-    zoom_x=int(math.log2((360/delta_lon)*tiles_x)) # That was easy
+    zoom_x=int(math.log2((360/delta_lon)*tiles_x))
     center=delta_lat/2+min_lat, delta_lon/2+min_lon
-    zoom_y=22
+    zoom_y=22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1]-deg2tile(max_lat, 0,zoom_y)[1]+1)>tiles_y:
         zoom_y-=1  # Very slow and dumb approach
     zoom=min(zoom_x, zoom_y, 19)
@@ -610,7 +611,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         icon_url=config["icon_url"],
     )
 
-    # There dosen't appear to be a changeset icon
+    # There doesn't appear to be a changeset icon
     # embed.set_thumbnail(url=config["symbols"]["changeset"])
 
     embed.timestamp = str_to_date(changeset["closed_at"])
@@ -639,7 +640,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     #     "&scale=1800&format=png"
     # )
     # embed.set_image(url=img_url)
-    # Easiest way to handle changeset rendering is to just draw bounding box.
+    # Easiest way to handle changeset rendering is to just draw bounding box to top tile.
 
     #### Fields ####
     if "info" in extras:
