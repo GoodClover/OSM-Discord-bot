@@ -897,6 +897,12 @@ async def on_raw_reaction_add(payload) -> None:
     # Safety check
     if (msg.author!=client.user and msg.author!=payload.member):
         return
+    # Allow only users whom bot originally replied to.
+    if (msg.author==client.user and msg.reference):  # If bot replied to someone
+        if not msg.reference.fail_if_not_exists:  # If replied message exists
+            msg2 = await client.get_channel(msg.reference.channel_id).fetch_message(msg.reference.message_id)
+            if (msg2.author!=payload.member):  # If author of original message is not someone
+                return  # who added reaction.
     await msg.delete()
 
 
