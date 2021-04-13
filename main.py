@@ -22,7 +22,10 @@ from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
 from PIL import Image
 
-import overpy
+try:
+    import overpy
+except ModuleNotFoundError:
+    print('OverPy was not found')
 
 ## SETUP ##
 
@@ -606,6 +609,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     #     "&scale=1800&format=png"
     # )
     # embed.set_image(url=img_url)
+    # Easiest way to handle changeset rendering is to just draw bounding box.
 
     #### Fields ####
     if "info" in extras:
@@ -767,7 +771,7 @@ async def showmap_command(ctx: SlashContext, URL: str) -> None:
     first_msg = await ctx.send("Getting image…")
     with ctx.channel.typing():
 
-        image_file = await get_image_cluster(lat_deg, lon_deg, zoom_int)
+        image_file, errorlog = await get_image_cluster(lat_deg, lon_deg, zoom_int)
 
         # TODO: I probabbly need to get some better injection protection at some point.
         # This works though so eh ¯\_(ツ)_/¯
@@ -861,6 +865,7 @@ async def get_image_cluster(
     if tiles_y%2==0: ymax-=1
     ymin=max(ymin,0)  # Sets vertical limits to area.
     ymax=min(ymax, n)
+    errorlog=[]
     Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
     for xtile in range(xmin, xmax + 1):
         xtile=xtile%n  # Repeats tiles across -180/180 meridian.
@@ -872,9 +877,10 @@ async def get_image_cluster(
                 i = i + 1
             except Exception as e:
                 print(e)
+                errorlog.append(('map tile', tile_url.format(zoom=zoom, x=xtile, y=ytile)))
         j = j + 1
     Cluster.save("data/cluster.png")
-    return File("data/cluster.png")
+    return File("data/cluster.png"), errorlog
 
 
 @client.event  # type: ignore
@@ -981,7 +987,9 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
-            files.append(await get_image_cluster(lat, lon, zoom))
+            file, errors=await get_image_cluster(lat, lon, zoom)
+            errorlog+=errors
+            files.append(file)
 
         # Send the messages
         if len(embeds) > 0:
@@ -990,8 +998,8 @@ async def on_message(msg: Message) -> None:
                 await msg.channel.send(embed=embed)
             for file in files:
                 await msg.channel.send(file=file)
-        # Due to possible future addition of rendering, files and embeds should not exclude each other.
-        if len(files) > 0:
+        # Sending files is also handled in embeds messaging.
+        elif len(files) > 0:
             await msg.channel.send(file=files[0], reference=msg)
             for file in files[1:]:
                 await msg.channel.send(file=file)
