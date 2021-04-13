@@ -910,16 +910,11 @@ async def get_image_cluster_old(
     return File("data/cluster.png")
 
 
-async def get_image_cluster(
+def get_image_tile_range(
     lat_deg: float,
     lon_deg: float,
-    zoom: int,
-    tile_url: str = config["tile_url"],
-) -> File:
-    # Rewrite of https://github.com/ForgottenHero/mr-maps
-    
-    # Following 2 lines are duplicataed at calc_preview_area()
-    tile_w, tile_h = 256, 256
+    zoom: int):
+    # Following line is duplicataed at calc_preview_area()
     tiles_x, tiles_y = 5, 5
     center_x, center_y=deg2tile(lat_deg, lon_deg, zoom)
     xmin, xmax=center_x-int(tiles_x/2), center_x+int(tiles_x/2)
@@ -929,6 +924,22 @@ async def get_image_cluster(
     if tiles_y%2==0: ymax-=1
     ymin=max(ymin,0)  # Sets vertical limits to area.
     ymax=min(ymax, n)
+    return xmin, xmax, ymin, ymax
+
+
+async def get_image_cluster(
+    lat_deg: float,
+    lon_deg: float,
+    zoom: int,
+    tile_url: str = config["tile_url"],
+) -> File:
+    # Rewrite of https://github.com/ForgottenHero/mr-maps
+    # Following line is duplicataed at calc_preview_area()
+    n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
+    tile_w, tile_h = 256, 256
+    
+    xmin, xmax, ymin, ymax=get_image_tile_range(lat_deg, lon_deg, zoom)
+    
     errorlog=[]
     Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
     for xtile in range(xmin, xmax + 1):
@@ -951,14 +962,24 @@ async def get_image_cluster(
 def render_elms_on_file(file, render_queue, frag):
     # Inputs:   File - unknown
     #           render_queue - [[(lat, lon), ...], ...]
-    #           ~~bbox~~ - (min_lat, max_lat, min_lon, max_lon)
     #           frag  - zoom, lat, lon used  for cluster rendering input.
-    # Renderer requires epsg 3587 crs converter.
-    min_lat, max_lat, min_lon, max_lon = bbox  # Bbox of render_queue, not map file.
+    # Renderer requires epsg 3587 crs converter. Implemented in deg2tile_float.
     # Use solution similar to get_image_cluster, but use deg2tile_float function to get xtile/ytile.
-    
     # I think tile calculation should be separate from get_image_cluster.
-    
+    zoom, lat_deg, lon_deg = frag
+    n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
+    tile_w, tile_h = 256, 256
+    xmin, xmax, ymin, ymax=get_image_tile_range(lat_deg, lon_deg, zoom)
+    # Convert geographical coordinates to X-Y coordinates to be used on map.
+    for seg_num in range(len(render_queue)):
+        for i in range(len(render_queue[seg_num])):
+            coord=render_queue[seg_num][i]
+            # Following returns X/Y similar to tile number, but as floats.
+            coord=deg2tile_float(coord[0], coord[1], zoom)
+            coord=round((coord[0] - xmin) * tile_w), round((coord[1] - ymin) * tile_h)
+            render_queue[seg_num][i]=coord  # Coord is now actual pixels, where line must be drawn.
+    # for seg_num in range(len(render_queue)):
+    # I don't know how to draw lines in PIL
     pass
 
 
