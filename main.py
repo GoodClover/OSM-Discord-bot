@@ -7,13 +7,14 @@ from typing import Any, Iterable, Union
 import os
 import random
 import json
-from datetime import datetime
-from urllib.parse import quote, unquote
 import re
 import math
+import requests
+import time
+from datetime import datetime
+from urllib.parse import quote, unquote
 from io import BytesIO
 
-import requests
 from dotenv import load_dotenv
 import discord
 from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
@@ -22,7 +23,6 @@ from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
 from PIL import Image
 from PIL import ImageDraw  # For drawing elements
-import time
 
 try:
     import overpy
@@ -31,7 +31,6 @@ except ModuleNotFoundError:
     print('OverPy was not found')
 
 ## SETUP ##
-
 # Regex
 SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
@@ -92,9 +91,9 @@ def sanitise(text: str) -> str:
 
 
 def get_suffixed_tag(
-    tags: dict[str, str],
-    key: str,
-    suffix: str,
+        tags: dict[str, str],
+        key: str,
+        suffix: str,
 ) -> tuple[str, str] | tuple[None, None]:
     suffixed_key = key + suffix
     if suffixed_key in tags:
@@ -105,7 +104,7 @@ def get_suffixed_tag(
         return None, None
 
 
-# This dosen't work correct.
+# This doesn't work correct.
 # def comma_every_three(text: str) -> str:
 #     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
 
@@ -128,15 +127,15 @@ async def on_ready() -> None:
 
 
 # I got annoyed by people using googlebad so often, so i implemented easter egg.
-recent_googles=set()
+recent_googles = set()
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
 async def googlebad_command(ctx: SlashContext) -> None:
     global recent_googles
-    time_now=time.time()
-    recent_googles=set(filter(lambda x: x>time_now-60, recent_googles)).union({time_now})
-    if len(recent_googles)>11:  # Called every 5 seconds.
-        recent_googles=set()
+    time_now = time.time()
+    recent_googles = set(filter(lambda x: x > time_now - 60, recent_googles)).union({time_now})
+    if len(recent_googles) > 11:  # Called every 5 seconds.
+        recent_googles = set()
         await ctx.send(random.choice(ohnos).replace("...", "Whenever you use `/googlebad` command,"))
         return
     await ctx.send(random.choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
@@ -213,8 +212,8 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     if data_wiki_en and data_wiki_en["image"]["image_url"]:
         embed.set_thumbnail(
             url=data_wiki_en["image"]["thumb_url_prefix"]
-            + str(config["thumb_size"])
-            + data_wiki_en["image"]["thumb_url_suffix"]
+                + str(config["thumb_size"])
+                + data_wiki_en["image"]["thumb_url_suffix"]
         )
     else:
         embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
@@ -317,121 +316,6 @@ def get_elm(elm_type: str, elm_id: str | int) -> dict:
     return elm
 
 
-def elms_to_render(elem_type, elem_id):
-    # Default value uses russia as example
-    # Example: elms_to_render('relation', '60189')  (Russia)
-    # Possible alternative approach to rendering is creating very rough drawing on bot-side.
-    # Using overpass to query just geometry.
-    # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
-    # Even easier alternative is drawing bounding box
-    # Throws IndexError if element was not found
-    result=overpass_api.query('[out:json][timeout:15];'+elem_type+'('+str(elem_id)+');out skel geom;')
-    # Since we are querying for single element, top level result will have just 1 element.
-    node_count=0
-    if elem_type=='relation':
-        segments=[]
-        seg_ends=dict()
-        elems=result.relations[0].members
-        prev_last=None
-        # Merges some ways together. For russia around 4000 ways became 34 segments.
-        for i in range(len(elems)):
-            #if elems[i].role not in ['inner','outer'] :
-            # Skip elements based on role... May cause a bug.
-            # It did cause a bug due with route relations.
-            geom=elems[i].geometry
-            if geom is None:  # Nodes
-                segments.append([(float(elems[i].attributes['lat']),float(elems[i].attributes['lon']))])
-                continue
-            first=(float(geom[0].lat), float(geom[0].lon))
-            last=(float(geom[-1].lat), float(geom[-1].lon))
-            # Adding and removing elements is faster at end of list
-            if first in seg_ends:
-                # Append current segment to end of existing one
-                segments[seg_ends[first]]+=geom[1:]
-                seg_ends[last]=seg_ends[first]
-                del seg_ends[first]
-            elif last in seg_ends:
-                # Append current segment to beginning of existing one
-                segments[seg_ends[last]]+=geom[:-1]
-                seg_ends[first]=seg_ends[last]
-                del seg_ends[last]
-            else:
-                # Create new segment
-                segments.append(geom)
-                seg_ends[last]=len(segments)-1
-                seg_ends[first]=len(segments)-1
-            # This approach has potential error in case some ways of relation are reversed.
-    if elem_type=='way':
-        segments=[]  # Simplified variant of relations' code
-        elems=result.ways[0]
-        segments.append(elems.get_nodes(True))
-    if elem_type=='node':
-        # Just creates a single-node segment.
-        segments=[[result.nodes[0]]]
-    Limiter_offset=50
-    Reduction_factor=2
-    # Relative simple way to reduce nodes by just picking every n-th node.
-    # Ignores ways with less than 50 nodes.
-    calc_limit=lambda x: x if x<Limiter_offset else int((x-Limiter_offset)**(1/Reduction_factor)+Limiter_offset)
-    for seg_num in range(len(segments)):
-        segment=segments[seg_num]  # For each segment
-        seg_len=len(segment)
-        limit=calc_limit(seg_len)  # Get number of nodes allowed
-        step=seg_len/limit         # Average number of nodes to be skipped
-        position=0
-        temp_array=[]
-        while position < seg_len:  # Iterates over segment
-            temp_array.append(segment[int(position)])  # And select only every step-th node
-            position+=step   # Using int(position) because step is usually float.
-        if int(position-step)!=seg_len-1:   # Always keep last node,
-            temp_array.append(segment[-1])  # But only if it's not added already.
-        # Convert overpy-node-objects into (lat, lon) pairs.
-        try:
-            segments[seg_num]=list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
-        except AttributeError:
-            pass  # Encountered relation node
-
-    # We now have list of lists of (lat, lon) coordinates to be rendered.
-    # These lists of segments can be joined, if multiple elements are requested
-    # In order to add support for colours, just create segment-colour pairs.
-    return segments
-
-
-def get_render_queue_bounds(queue):
-    min_lat, max_lat, min_lon, max_lon=90,-90,180,-180
-    precision=5
-    for segment in queue:
-        for coordinates in segment:
-            lat, lon=coordinates
-            if lat > max_lat: max_lat=round(lat,precision)
-            if lat < min_lat: min_lat=round(lat,precision)
-            if lon > max_lon: max_lon=round(lon,precision)
-            if lon < min_lon: min_lon=round(lon,precision)
-    if min_lat== max_lat:
-        min_lat-=10**(-precision)
-        max_lat+=10**(-precision)
-    if min_lon== max_lon:
-        min_lon-=10**(-precision)
-        max_lon+=10**(-precision)
-    return (min_lat, max_lat, min_lon, max_lon)
-
-def calc_preview_area(queue_bounds):
-    # Input: tuple (min_lat, max_lat, min_lon, max_lon)
-    # Output: tuple (int(zoom), float(lat), float(lon))
-    # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
-    # Finds map area, that should contain all elements.
-    min_lat, max_lat, min_lon, max_lon=queue_bounds
-    tiles_x, tiles_y = 5, 5
-    delta_lat=max_lat-min_lat
-    delta_lon=max_lon-min_lon
-    zoom_x=int(math.log2((360/delta_lon)*tiles_x))
-    center=delta_lat/2+min_lat, delta_lon/2+min_lon
-    zoom_y=22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (deg2tile(min_lat, 0, zoom_y)[1]-deg2tile(max_lat, 0,zoom_y)[1]+1)>tiles_y:
-        zoom_y-=1  # Very slow and dumb approach
-    zoom=min(zoom_x, zoom_y, 19)
-    return (zoom, *center)
-
 def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
@@ -484,16 +368,15 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
     #### Image ####
     # * This would create significant stress to the OSM servers, so I don't reccomend it.
-    # ! This dosen't work due to the OSM servers having some form of token check.
+    # ! This doesn't work due to the OSM servers having some form of token check.
     # img_url = (
     #     "https://render.openstreetmap.org/cgi-bin/export?bbox="
     #     f"{elm['lon']-0.001},{elm['lat']-0.001},{elm['lon']+0.001},{elm['lat']+0.001}"
     #     "&scale=1800&format=png"
     # )
     # embed.set_image(url=img_url)
-    
-    # segments=elms_to_render()
 
+    # segments = elms_to_render()
 
     #### Fields ####
     if "info" in extras:
@@ -506,7 +389,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
         embed.add_field(name="Last editor", value=f"[{elm['user']}](<https://www.osm.org/user/{quote(elm['user'])}>)")
 
         if elm["type"] == "node":
-            # Discord dosen't appear to link the geo: URI :( I've left incase it gets supported at some time.
+            # Discord doesn't appear to link the geo: URI :( I've left incase it gets supported at some time.
             embed.add_field(
                 name="Position (lat/lon)", value=f"[{elm['lat']}, {elm['lon']}](<geo:{elm['lat']},{elm['lon']}>)"
             )
@@ -644,7 +527,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
 
     #### Image ####
     # * This would create significant stress to the OSM servers, so I don't reccomend it.
-    # ! This dosen't work due to the OSM servers having some form of token check.
+    # ! This doesn't work due to the OSM servers having some form of token check.
     # img_url = (
     #     "https://render.openstreetmap.org/cgi-bin/export?bbox="
     #     f"{changeset['minlon']},{changeset['minlat']},{changeset['maxlon']},{changeset['maxlat']}"
@@ -802,7 +685,6 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def showmap_command(ctx: SlashContext, URL: str) -> None:
-
     try:
         zoom_int, lat_deg, lon_deg = frag_to_bits(URL)
     except ValueError:
@@ -847,38 +729,158 @@ def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     n = 2.0 ** zoom
     xtile = int((lon_deg + 180.0) / 360.0 * n)
     # Sets safety bounds on vertical tile range.
-    if lat_deg>=89:
-        return (xtile,0)
-    if lat_deg<=-89:
-        return (xtile,n-1)
+    if lat_deg >= 89:
+        return (xtile, 0)
+    if lat_deg <= -89:
+        return (xtile, n - 1)
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
-    return (xtile, max(min(n-1,ytile),0))
+    return (xtile, max(min(n - 1, ytile), 0))
 
 
 def tile2deg(zoom, x, y):
     # Gets top-left coordinate of tile.
     lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
-    lat_rad =  2 * math.atan(math.exp(lat_rad)) - math.pi/2
+    lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
     lat = lat_rad * 180.0 / math.pi
-    # Handling latitude out of range is not necessarry 
+    # Handling latitude out of range is not necessarry
     # longitude maps linearly to map, so we simply scale:
-    lng = -180.0 + (360.0*x/(2**zoom)%360)
+    lng = -180.0 + (360.0 * x / (2 ** zoom) % 360)
     return (lat, lng)
+
 
 def deg2tile_float(lat_deg, lon_deg, zoom):
     # This is not really supposed to work, but it works.
-    # By removing rounding down from deg2tile function, we can estimate 
+    # By removing rounding down from deg2tile function, we can estimate
     # position where to draw coordinates during element export.
     lat_rad = math.radians(lat_deg)
     n = 2.0 ** zoom
     xtile = (lon_deg + 180.0) / 360.0 * n
     # Sets safety bounds on vertical tile range.
-    if lat_deg>=89:
-        return (xtile,0)
-    if lat_deg<=-89:
-        return (xtile,n-1)
+    if lat_deg >= 89:
+        return (xtile, 0)
+    if lat_deg <= -89:
+        return (xtile, n - 1)
     ytile = (1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n
-    return (xtile, max(min(n-1,ytile),0))
+    return (xtile, max(min(n - 1, ytile), 0))
+
+
+def elms_to_render(elem_type, elem_id):
+    # Default value uses russia as example
+    # Example: elms_to_render('relation', '60189')  (Russia)
+    # Possible alternative approach to rendering is creating very rough drawing on bot-side.
+    # Using overpass to query just geometry.
+    # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
+    # Even easier alternative is drawing bounding box
+    # Throws IndexError if element was not found
+    result = overpass_api.query('[out:json][timeout:15];' + elem_type + '(' + str(elem_id) + ');out skel geom;')
+    # Since we are querying for single element, top level result will have just 1 element.
+    node_count = 0
+    if elem_type == 'relation':
+        segments = []
+        seg_ends = dict()
+        elems = result.relations[0].members
+        prev_last = None
+        # Merges some ways together. For russia around 4000 ways became 34 segments.
+        for i in range(len(elems)):
+            # if elems[i].role not in ['inner','outer'] :
+            # Skip elements based on role... May cause a bug.
+            # It did cause a bug due with route relations.
+            geom = elems[i].geometry
+            if geom is None:  # Nodes
+                segments.append([(float(elems[i].attributes['lat']), float(elems[i].attributes['lon']))])
+                continue
+            first = (float(geom[0].lat), float(geom[0].lon))
+            last = (float(geom[-1].lat), float(geom[-1].lon))
+            # Adding and removing elements is faster at end of list
+            if first in seg_ends:
+                # Append current segment to end of existing one
+                segments[seg_ends[first]] += geom[1:]
+                seg_ends[last] = seg_ends[first]
+                del seg_ends[first]
+            elif last in seg_ends:
+                # Append current segment to beginning of existing one
+                segments[seg_ends[last]] += geom[:-1]
+                seg_ends[first] = seg_ends[last]
+                del seg_ends[last]
+            else:
+                # Create new segment
+                segments.append(geom)
+                seg_ends[last] = len(segments) - 1
+                seg_ends[first] = len(segments) - 1
+            # This approach has potential error in case some ways of relation are reversed.
+    if elem_type == 'way':
+        segments = []  # Simplified variant of relations' code
+        elems = result.ways[0]
+        segments.append(elems.get_nodes(True))
+    if elem_type == 'node':
+        # Just creates a single-node segment.
+        segments = [[result.nodes[0]]]
+    Limiter_offset = 50
+    Reduction_factor = 2
+    # Relative simple way to reduce nodes by just picking every n-th node.
+    # Ignores ways with less than 50 nodes.
+    calc_limit = lambda x: x if x < Limiter_offset else int(
+        (x - Limiter_offset) ** (1 / Reduction_factor) + Limiter_offset)
+    for seg_num in range(len(segments)):
+        segment = segments[seg_num]  # For each segment
+        seg_len = len(segment)
+        limit = calc_limit(seg_len)  # Get number of nodes allowed
+        step = seg_len / limit  # Average number of nodes to be skipped
+        position = 0
+        temp_array = []
+        while position < seg_len:  # Iterates over segment
+            temp_array.append(segment[int(position)])  # And select only every step-th node
+            position += step  # Using int(position) because step is usually float.
+        if int(position - step) != seg_len - 1:  # Always keep last node,
+            temp_array.append(segment[-1])  # But only if it's not added already.
+        # Convert overpy-node-objects into (lat, lon) pairs.
+        try:
+            segments[seg_num] = list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
+        except AttributeError:
+            pass  # Encountered relation node
+
+    # We now have list of lists of (lat, lon) coordinates to be rendered.
+    # These lists of segments can be joined, if multiple elements are requested
+    # In order to add support for colours, just create segment-colour pairs.
+    return segments
+
+
+def get_render_queue_bounds(queue):
+    min_lat, max_lat, min_lon, max_lon = 90, -90, 180, -180
+    precision = 5
+    for segment in queue:
+        for coordinates in segment:
+            lat, lon = coordinates
+            if lat > max_lat: max_lat = round(lat, precision)
+            if lat < min_lat: min_lat = round(lat, precision)
+            if lon > max_lon: max_lon = round(lon, precision)
+            if lon < min_lon: min_lon = round(lon, precision)
+    if min_lat == max_lat:
+        min_lat -= 10 ** (-precision)
+        max_lat += 10 ** (-precision)
+    if min_lon == max_lon:
+        min_lon -= 10 ** (-precision)
+        max_lon += 10 ** (-precision)
+    return (min_lat, max_lat, min_lon, max_lon)
+
+
+def calc_preview_area(queue_bounds):
+    # Input: tuple (min_lat, max_lat, min_lon, max_lon)
+    # Output: tuple (int(zoom), float(lat), float(lon))
+    # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
+    # Finds map area, that should contain all elements.
+    min_lat, max_lat, min_lon, max_lon = queue_bounds
+    tiles_x, tiles_y = 5, 5
+    delta_lat = max_lat - min_lat
+    delta_lon = max_lon - min_lon
+    zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
+    center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
+    zoom_y = 22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
+        zoom_y -= 1  # Very slow and dumb approach
+    zoom = min(zoom_x, zoom_y, 19)
+    return (zoom, *center)
+
 
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
@@ -891,10 +893,10 @@ HEADERS = {
 
 
 async def get_image_cluster_old(
-    lat_deg: float,
-    lon_deg: float,
-    zoom: int,
-    tile_url: str = config["tile_url"],
+        lat_deg: float,
+        lon_deg: float,
+        zoom: int,
+        tile_url: str = config["tile_url"],
 ) -> File:
     # Modified from https://github.com/ForgottenHero/mr-maps
     delta_long = 0.00421 * math.pow(2, 19 - int(zoom))
@@ -921,52 +923,48 @@ async def get_image_cluster_old(
 
 
 def get_image_tile_range(
-    lat_deg: float,
-    lon_deg: float,
-    zoom: int):
+        lat_deg: float,
+        lon_deg: float,
+        zoom: int):
     # Following line is duplicataed at calc_preview_area()
     tiles_x, tiles_y = 5, 5
-    center_x, center_y=deg2tile(lat_deg, lon_deg, zoom)
-    xmin, xmax=center_x-int(tiles_x/2), center_x+int(tiles_x/2)
+    center_x, center_y = deg2tile(lat_deg, lon_deg, zoom)
+    xmin, xmax = center_x - int(tiles_x / 2), center_x + int(tiles_x / 2)
     n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
-    if tiles_x%2==0: xmax-=1
-    ymin, ymax=center_y-int(tiles_y/2), center_y+int(tiles_y/2)
-    if tiles_y%2==0: ymax-=1
-    ymin=max(ymin,0)  # Sets vertical limits to area.
-    ymax=min(ymax, n)
+    if tiles_x % 2 == 0: xmax -= 1
+    ymin, ymax = center_y - int(tiles_y / 2), center_y + int(tiles_y / 2)
+    if tiles_y % 2 == 0: ymax -= 1
+    ymin = max(ymin, 0)  # Sets vertical limits to area.
+    ymax = min(ymax, n)
     return xmin, xmax, ymin, ymax
 
 
 async def get_image_cluster(
-    lat_deg: float,
-    lon_deg: float,
-    zoom: int,
-    tile_url: str = config["tile_url"],
+        lat_deg: float,
+        lon_deg: float,
+        zoom: int,
+        tile_url: str = config["tile_url"],
 ) -> File:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
     tile_w, tile_h = 256, 256
-    
-    xmin, xmax, ymin, ymax=get_image_tile_range(lat_deg, lon_deg, zoom)
-    
-    errorlog=[]
+
+    xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
+    errorlog = []
     Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
     for xtile in range(xmin, xmax + 1):
-        xtile=xtile%n  # Repeats tiles across -180/180 meridian.
+        xtile = xtile % n  # Repeats tiles across -180/180 meridian.
         for ytile in range(ymin, ymax + 1):
             try:
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
                 Cluster.paste(tile, box=((xtile - xmin) * tile_w, (ytile - ymin) * tile_h))
-                i = i + 1
             except Exception as e:
                 print(e)
                 errorlog.append(('map tile', tile_url.format(zoom=zoom, x=xtile, y=ytile)))
-        j = j + 1
     Cluster.save("data/cluster.png")
     return File("data/cluster.png"), errorlog
-
 
 
 def render_elms_on_file(file, render_queue, frag):
@@ -979,39 +977,39 @@ def render_elms_on_file(file, render_queue, frag):
     zoom, lat_deg, lon_deg = frag
     n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
     tile_w, tile_h = 256, 256
-    xmin, xmax, ymin, ymax=get_image_tile_range(lat_deg, lon_deg, zoom)
+    xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
-            coord=render_queue[seg_num][i]
+            coord = render_queue[seg_num][i]
             # Following returns X/Y similar to tile number, but as floats.
-            coord=deg2tile_float(coord[0], coord[1], zoom)
-            coord=round((coord[0] - xmin) * tile_w), round((coord[1] - ymin) * tile_h)
-            render_queue[seg_num][i]=coord  # Coord is now actual pixels, where line must be drawn.
-    # for seg_num in range(len(render_queue)):
+            coord = deg2tile_float(coord[0], coord[1], zoom)
+            coord = round((coord[0] - xmin) * tile_w), round((coord[1] - ymin) * tile_h)
+            # Coord is now actual pixels, where line must be drawn on image.
+            render_queue[seg_num][i] = coord
+        # Draw segment onto image
     # I don't know how to draw lines in PIL
-    pass
 
 
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload) -> None:
-    # Probably needs testing. It should maybe remove bot's own message, 
+    # Probably needs testing. It should maybe remove bot's own message,
     # if someone reacts with wastebasket emoji
     # For safety reasons, it should also authenticate reacting user
     # Currently anyone can delete bot's message.
-    waste_basket=b'\xf0\x9f\x97\x91\xef\xb8\x8f'
-    if (payload.emoji.name.encode('utf8')!=waste_basket):
+    waste_basket = b'\xf0\x9f\x97\x91\xef\xb8\x8f'
+    if (payload.emoji.name.encode('utf8') != waste_basket):
         return
     # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
     msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
     # Safety check
-    if (msg.author!=client.user and msg.author!=payload.member):
+    if (msg.author != client.user and msg.author != payload.member):
         return
     # Allow only users whom bot originally replied to.
-    if (msg.author==client.user and msg.reference):  # If bot replied to someone
+    if (msg.author == client.user and msg.reference):  # If bot replied to someone
         if not msg.reference.fail_if_not_exists:  # If replied message exists
             msg2 = await client.get_channel(msg.reference.channel_id).fetch_message(msg.reference.message_id)
-            if (msg2.author!=payload.member):  # If author of original message is not someone
+            if (msg2.author != payload.member):  # If current reacting user isn't author of original message
                 return  # who added reaction.
     await msg.delete()
 
@@ -1050,27 +1048,28 @@ async def on_message(msg: Message) -> None:
     if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
         return
     ask_confirmation = False
-    for match in elms+changesets:
-        if match[2]!='/':  # Found case when user didn't use standard node/123 format
+    for match in elms + changesets:
+        if match[2] != '/':  # Found case when user didn't use standard node/123 format
             ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
     if ask_confirmation:
-        reaction_string='\U0001f50e'  # :mag_right:
+        reaction_string = '\U0001f50e'  # :mag_right:
         await msg.add_reaction(reaction_string)
+
         def check(reaction, user_obj):
             return user_obj == msg.author and str(reaction.emoji) == reaction_string
+
         try:
             reaction, user_obj = await client.wait_for('reaction_add', timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
             await message.clear_reaction(reaction_string)
-            return 
+            return
         else:  # User responded
             await message.clear_reaction(reaction_string)
-    render_queue list[list[tuple[float]]] = []
-    
+    render_queue: list[list[tuple[float]]] = []
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-    
+
     async with msg.channel.typing():
         # Create the messages
         embeds: list[Embed] = []
@@ -1081,19 +1080,19 @@ async def on_message(msg: Message) -> None:
             for elm_id in elm_ids:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    #render_queue += elms_to_render(elm_type, elm_id)
+                    # render_queue += elms_to_render(elm_type, elm_id)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
         # Next step is to calculate map area for render.
         if render_queue:
-            #map_frag=bits_to_frag(calc_preview_area(get_render_queue_bounds(render_queue)))
-            bbox=get_render_queue_bounds(render_queue)
+            # map_frag=bits_to_frag(calc_preview_area(get_render_queue_bounds(render_queue)))
+            bbox = get_render_queue_bounds(render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
-            #file, errors=await get_image_cluster(lat, lon, zoom)
-            #errorlog+=errors
-            #render_elms_on_file(file, render_queue, (zoom, lat, lon))
-            #files.append(file)
+            # file, errors=await get_image_cluster(lat, lon, zoom)
+            # errorlog+=errors
+            # render_elms_on_file(file, render_queue, (zoom, lat, lon))
+            # files.append(file)
 
         for changeset_ids in changesets:
             for changeset_id in changeset_ids:
@@ -1110,8 +1109,8 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
-            file, errors=await get_image_cluster(lat, lon, zoom)
-            errorlog+=errors
+            file, errors = await get_image_cluster(lat, lon, zoom)
+            errorlog += errors
             files.append(file)
 
         # Send the messages
@@ -1128,7 +1127,7 @@ async def on_message(msg: Message) -> None:
                 await msg.channel.send(file=file)
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
-            await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+                await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
 
 
 ### Member count ###
@@ -1236,7 +1235,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{sanitise(result)}**"
+                + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{sanitise(result)}**"
     )
 
     await ctx.send(
