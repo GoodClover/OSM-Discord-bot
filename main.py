@@ -988,6 +988,10 @@ def render_elms_on_file(file, render_queue, frag):
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
+        # draw_node(render_queue[seg_num][0])
+        # for node_num in range(1,len(render_queue[seg_num])):
+        #     draw_line(render_queue[seg_num][node_num-1], render_queue[seg_num][node_num])
+        #     draw_node(render_queue[seg_num][node_num])
     # I don't know how to draw lines in PIL
 
 
