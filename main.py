@@ -386,7 +386,7 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
 
 
 def get_render_queue_bounds(queue):
-    min_lat, max_lat, min_lon, max_lat=90,-90,180,-180
+    min_lat, max_lat, min_lon, max_lon=90,-90,180,-180
     precision=5
     for segment in queue:
         for coordinates in segment:
@@ -408,10 +408,11 @@ def calc_preview_area(queue_bounds):
     # Output: tuple (int(zoom), float(lat), float(lon))
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
+    min_lat, max_lat, min_lon, max_lon=queue_bounds
     tiles_x, tiles_y = 5, 5
     delta_lat=max_lat-min_lat
     delta_lon=max_lon-min_lon
-    zoom_x=int(math.log2((360/delta_lon)*tiles_x) # That was easy
+    zoom_x=int(math.log2((360/delta_lon)*tiles_x)) # That was easy
     center=delta_lat/2+min_lat, delta_lon/2+min_lon
     zoom_y=22
     while (deg2tile(min_lat, 0, zoom_y)[1]-deg2tile(max_lat, 0,zoom_y)[1]+1)>tiles_y:
