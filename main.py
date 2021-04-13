@@ -24,6 +24,7 @@ from PIL import Image
 
 try:
     import overpy
+    overpass_api = overpy.Overpass()
 except ModuleNotFoundError:
     print('OverPy was not found')
 
@@ -307,12 +308,11 @@ def get_elm(elm_type: str, elm_id: str | int) -> dict:
 
 def elms_to_render(elem_type='relation', elem_id='60189'):
     # Default value uses russia as example
-    # Possible alternative approach to rendering is creating very rough drawing on bot-side. 
+    # Possible alternative approach to rendering is creating very rough drawing on bot-side.
     # Using overpass to query just geometry. Such as (for Sweden)
     # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
     # Even easier alternative is drawing bounding box
     # Throws IndexError if element was not found
-    overpass_api = overpy.Overpass()
     result=overpass_api.query('[out:json][timeout:15];'+elem_type+'('+str(elem_id)+');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count=0
@@ -323,25 +323,29 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
         prev_last=None
         # Merges some ways together. For russia around 4000 ways became 34 segments.
         for i in range(len(elems)):
-            if elems[i].role not in ['inner','outer']:
-                # Skip elements based on role... May cause a bug.
+            #if elems[i].role not in ['inner','outer'] :
+            # Skip elements based on role... May cause a bug.
+            # It did cause a bug due with route relations.
+            geom=elems[i].geometry
+            if geom is None:  # Nodes
+                segments.append([(float(elems[i].attributes['lat']),float(elems[i].attributes['lon']))])
                 continue
-            first=(float(elems[i].geometry[0].lat), float(elems[i].geometry[0].lon))
-            last=(float(elems[i].geometry[-1].lat), float(elems[i].geometry[-1].lon))
+            first=(float(geom[0].lat), float(geom[0].lon))
+            last=(float(geom[-1].lat), float(geom[-1].lon))
             # Adding and removing elements is faster at end of list
             if first in seg_ends:
                 # Append current segment to end of existing one
-                segments[seg_ends[first]]+=elems[i].geometry[1:]
+                segments[seg_ends[first]]+=geom[1:]
                 seg_ends[last]=seg_ends[first]
                 del seg_ends[first]
             elif last in seg_ends:
                 # Append current segment to beginning of existing one
-                segments[seg_ends[last]]+=elems[i].geometry[:-1]
+                segments[seg_ends[last]]+=geom[:-1]
                 seg_ends[first]=seg_ends[last]
                 del seg_ends[last]
             else:
                 # Create new segment
-                segments.append(elems[i].geometry)
+                segments.append(geom)
                 seg_ends[last]=len(segments)-1
                 seg_ends[first]=len(segments)-1
             # This approach has potential error in case some ways of relation are reversed.
@@ -370,8 +374,11 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
         if int(position-step)!=seg_len-1:   # Always keep last node,
             temp_array.append(segment[-1])  # But only if it's not added already.
         # Convert overpy-node-objects into (lat, lon) pairs.
-        segments[seg_num]=list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
-    
+        try:
+            segments[seg_num]=list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
+        except AttributeError:
+            pass  # Encountered relation node
+
     # We now have list of lists of (lat, lon) coordinates to be rendered.
     # These lists of segments can be joined, if multiple elements are requested
     # In order to add support for colours, just create segment-colour pairs.
@@ -380,15 +387,37 @@ def elms_to_render(elem_type='relation', elem_id='60189'):
 
 def get_render_queue_bounds(queue):
     min_lat, max_lat, min_lon, max_lat=90,-90,180,-180
+    precision=5
     for segment in queue:
         for coordinates in segment:
             lat, lon=coordinates
-            if lat > max_lat: max_lat=lat
-            if lat < min_lat: min_lat=lat
-            if lon > max_lon: max_lon=lon
-            if lon < min_lon: min_lon=lon
-    return (min_lat, max_lat, min_lon, max_lat)
+            if lat > max_lat: max_lat=round(lat,precision)
+            if lat < min_lat: min_lat=round(lat,precision)
+            if lon > max_lon: max_lon=round(lon,precision)
+            if lon < min_lon: min_lon=round(lon,precision)
+    if min_lat== max_lat:
+        min_lat-=10**(-precision)
+        max_lat+=10**(-precision)
+    if min_lon== max_lon:
+        min_lon-=10**(-precision)
+        max_lon+=10**(-precision)
+    return (min_lat, max_lat, min_lon, max_lon)
 
+def calc_preview_area(queue_bounds):
+    # Input: tuple (min_lat, max_lat, min_lon, max_lon)
+    # Output: tuple (int(zoom), float(lat), float(lon))
+    # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
+    # Finds map area, that should contain all elements.
+    tiles_x, tiles_y = 5, 5
+    delta_lat=max_lat-min_lat
+    delta_lon=max_lon-min_lon
+    zoom_x=int(math.log2((360/delta_lon)*tiles_x) # That was easy
+    center=delta_lat/2+min_lat, delta_lon/2+min_lon
+    zoom_y=22
+    while (deg2tile(min_lat, 0, zoom_y)[1]-deg2tile(max_lat, 0,zoom_y)[1]+1)>tiles_y:
+        zoom_y-=1  # Very slow and dumb approach
+    zoom=min(zoom_x, zoom_y, 19)
+    return (zoom, *center)
 
 def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
@@ -793,6 +822,11 @@ def frag_to_bits(URL: str) -> tuple[int, float, float]:
     return int(zoom), float(lat), float(lon)
 
 
+def bits_to_frag(matches):
+    zoom, lat, lon = matches
+    return f"#map={zoom}/{lat}/{lon}"
+
+
 def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     # I have no clue how this works.
     # Taken from https://github.com/ForgottenHero/mr-maps
@@ -855,6 +889,8 @@ async def get_image_cluster(
     tile_url: str = config["tile_url"],
 ) -> File:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
+    
+    # Following 2 lines are duplicataed at calc_preview_area()
     tile_w, tile_h = 256, 256
     tiles_x, tiles_y = 5, 5
     center_x, center_y=deg2tile(lat_deg, lon_deg, zoom)
@@ -956,7 +992,7 @@ async def on_message(msg: Message) -> None:
             return 
         else:  # User responded
             await message.clear_reaction(reaction_string)
-    # render_queue list[list[tuple[float]]] = []
+    render_queue list[list[tuple[float]]] = []
     
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
@@ -974,9 +1010,15 @@ async def on_message(msg: Message) -> None:
                     # render_queue += elms_to_render(elm_type, elm_id)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
-        #if render_queue:
-        #    get_render_queue_bounds(render_queue)
+
         # Next step is to calculate map area for render.
+        if render_queue:
+            #map_frag=bits_to_frag(calc_preview_area(get_render_queue_bounds(render_queue)))
+            zoom, lat, lon = calc_preview_area(get_render_queue_bounds(render_queue))
+            #file, errors=await get_image_cluster(lat, lon, zoom)
+            #errorlog+=errors
+            #render_elms_on_file(file, render_queue)
+            #files.append(file)
 
         for changeset_ids in changesets:
             for changeset_id in changeset_ids:
