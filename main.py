@@ -22,6 +22,7 @@ from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
 from PIL import Image
 from PIL import ImageDraw  # For drawing elements
+import time
 
 try:
     import overpy
@@ -126,9 +127,18 @@ async def on_ready() -> None:
     print(" - " + "\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
+# I got annoyed by people using googlebad so often, so i implemented easter egg.
+recent_googles=set()
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
 async def googlebad_command(ctx: SlashContext) -> None:
+    global recent_googles
+    time_now=time.time()
+    recent_googles=set(filter(lambda x: x>time_now-60, recent_googles)).union({time_now})
+    if len(recent_googles)>11:  # Called every 5 seconds.
+        recent_googles=set()
+        await ctx.send(random.choice(ohnos).replace("...", "Whenever you use `/googlebad` command,"))
+        return
     await ctx.send(random.choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
 
 
