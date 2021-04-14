@@ -765,13 +765,16 @@ def deg2tile_float(lat_deg, lon_deg, zoom):
 
 
 def elms_to_render(elem_type, elem_id):
-    # Default value uses russia as example
+    # Inputs:   element_type (node / way / relation)
+    #           elem_id     element's OSM ID as string
+    # Queries OSM element geometry via overpass API.
     # Example: elms_to_render('relation', '60189')  (Russia)
-    # Possible alternative approach to rendering is creating very rough drawing on bot-side.
+    # Possible alternative approach to rendering by creating very rough drawing on bot-side.
     # Using overpass to query just geometry.
-    # And then draw just very few nodes onto map retrieved by showmap of zoom level 1..9
+    # And then draw just very few nodes onto map retrieved by showmap
     # Even easier alternative is drawing bounding box
     # Throws IndexError if element was not found
+    # Needs handling for Overpass's over quota error.
     result = overpass_api.query('[out:json][timeout:15];' + elem_type + '(' + str(elem_id) + ');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
@@ -780,13 +783,14 @@ def elms_to_render(elem_type, elem_id):
         seg_ends = dict()
         elems = result.relations[0].members
         prev_last = None
-        # Merges some ways together. For russia around 4000 ways became 34 segments.
+        # Merges some ways together. For russia, around 4000 ways became 34 segments.
         for i in range(len(elems)):
             # if elems[i].role not in ['inner','outer'] :
             # Skip elements based on role... May cause a bug.
             # It did cause a bug due with route relations.
+            # Everything that can be rendered are rendered now.
             geom = elems[i].geometry
-            if geom is None:  # Nodes
+            if geom is None:  # Single node as member of relation
                 segments.append([(float(elems[i].attributes['lat']), float(elems[i].attributes['lon']))])
                 continue
             first = (float(geom[0].lat), float(geom[0].lon))
@@ -811,14 +815,15 @@ def elms_to_render(elem_type, elem_id):
     if elem_type == 'way':
         segments = []  # Simplified variant of relations' code
         elems = result.ways[0]
-        segments.append(elems.get_nodes(True))
+        segments.append(elems.get_nodes(True))  # True means resolving node references?
     if elem_type == 'node':
-        # Just creates a single-node segment.
+        # Creates simply a single-node segment.
         segments = [[result.nodes[0]]]
     Limiter_offset = 50
     Reduction_factor = 2
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
+    # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
     calc_limit = lambda x: x if x < Limiter_offset else int(
         (x - Limiter_offset) ** (1 / Reduction_factor) + Limiter_offset)
     for seg_num in range(len(segments)):
@@ -837,7 +842,7 @@ def elms_to_render(elem_type, elem_id):
         try:
             segments[seg_num] = list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
         except AttributeError:
-            pass  # Encountered relation node
+            pass  # Encountered relation node, see ln 794
 
     # We now have list of lists of (lat, lon) coordinates to be rendered.
     # These lists of segments can be joined, if multiple elements are requested
@@ -846,8 +851,10 @@ def elms_to_render(elem_type, elem_id):
 
 
 def get_render_queue_bounds(queue):
+    # Finds bounding box of rendering queue
+    # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90, -90, 180, -180
-    precision = 5
+    precision = 5  # https://xkcd.com/2170/
     for segment in queue:
         for coordinates in segment:
             lat, lon = coordinates
@@ -855,10 +862,10 @@ def get_render_queue_bounds(queue):
             if lat < min_lat: min_lat = round(lat, precision)
             if lon > max_lon: max_lon = round(lon, precision)
             if lon < min_lon: min_lon = round(lon, precision)
-    if min_lat == max_lat:
+    if min_lat == max_lat:  # In event when all coordinates are same
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
-    if min_lon == max_lon:
+    if min_lon == max_lon:  # Add small variation to not end up in ZeroDivisionError
         min_lon -= 10 ** (-precision)
         max_lon += 10 ** (-precision)
     return (min_lat, max_lat, min_lon, max_lon)
@@ -877,7 +884,7 @@ def calc_preview_area(queue_bounds):
     center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
     zoom_y = 22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
-        zoom_y -= 1  # Very slow and dumb approach
+        zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, 19)
     return (zoom, *center)
 
@@ -1160,6 +1167,7 @@ async def on_message(msg: Message) -> None:
 
 
 ### Member count ###
+# It needs solution to update member count when bot is started
 @client.event  # type: ignore
 async def on_member_join(member: Member) -> None:
     await update_member_count(member.guild)
