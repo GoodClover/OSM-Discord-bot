@@ -78,7 +78,7 @@ slash = SlashCommand(client, sync_commands=True)
 
 
 ## UTILS ##
-
+map_save_path="data/cluster.png"
 
 def str_to_date(text: str) -> datetime:
     return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
@@ -918,8 +918,9 @@ async def get_image_cluster_old(
             except Exception as e:
                 print(e)
         j = j + 1
-    Cluster.save("data/cluster.png")
-    return File("data/cluster.png")
+    Cluster.save(map_save_path)
+    # return File(map_save_path)
+    return Cluster 
 
 
 def get_image_tile_range(
@@ -963,12 +964,28 @@ async def get_image_cluster(
             except Exception as e:
                 print(e)
                 errorlog.append(('map tile', tile_url.format(zoom=zoom, x=xtile, y=ytile)))
-    Cluster.save("data/cluster.png")
-    return File("data/cluster.png"), errorlog
+    Cluster.save(map_save_path)
+    return Cluster, errorlog
 
 
-def render_elms_on_file(file, render_queue, frag):
-    # Inputs:   File - unknown
+def draw_line(segment, draw):
+    # https://stackoverflow.com/questions/59060887
+    # This is polyline of all coordinates on array.
+    draw.line(segment, fill='red', width=2)
+
+
+def draw_node(coord, draw):
+    # https://stackoverflow.com/questions/2980366
+    r=3
+    x,y=coord
+    leftUpPoint = (x-r, y-r)
+    rightDownPoint = (x+r, y+r)
+    twoPointList = [leftUpPoint, rightDownPoint]
+    draw.ellipse(twoPointList, fill=(255,0,0,255))
+
+
+def render_elms_on_cluster(Cluster, render_queue, frag, image):
+    # Inputs:   Cluster - PIL image
     #           render_queue - [[(lat, lon), ...], ...]
     #           frag  - zoom, lat, lon used  for cluster rendering input.
     # Renderer requires epsg 3587 crs converter. Implemented in deg2tile_float.
@@ -979,6 +996,7 @@ def render_elms_on_file(file, render_queue, frag):
     tile_w, tile_h = 256, 256
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
+    draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
             coord = render_queue[seg_num][i]
@@ -988,11 +1006,13 @@ def render_elms_on_file(file, render_queue, frag):
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
-        # draw_node(render_queue[seg_num][0])
-        # for node_num in range(1,len(render_queue[seg_num])):
-        #     draw_line(render_queue[seg_num][node_num-1], render_queue[seg_num][node_num])
-        #     draw_node(render_queue[seg_num][node_num])
-    # I don't know how to draw lines in PIL
+        draw_node(render_queue[seg_num][0], draw)
+        draw_line(render_queue[seg_num], draw)
+        for node_num in range(1,len(render_queue[seg_num])):
+            draw_node(render_queue[seg_num][node_num], draw)
+    Cluster.save(map_save_path)
+    return Cluster
+    # I barely know how to draw lines in PIL
 
 
 @client.event  # type: ignore
@@ -1084,19 +1104,9 @@ async def on_message(msg: Message) -> None:
             for elm_id in elm_ids:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    # render_queue += elms_to_render(elm_type, elm_id)
+                    render_queue += elms_to_render(elm_type, elm_id)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
-
-        # Next step is to calculate map area for render.
-        if render_queue:
-            # map_frag=bits_to_frag(calc_preview_area(get_render_queue_bounds(render_queue)))
-            bbox = get_render_queue_bounds(render_queue)
-            zoom, lat, lon = calc_preview_area(bbox)
-            # file, errors=await get_image_cluster(lat, lon, zoom)
-            # errorlog+=errors
-            # render_elms_on_file(file, render_queue, (zoom, lat, lon))
-            # files.append(file)
 
         for changeset_ids in changesets:
             for changeset_id in changeset_ids:
@@ -1104,6 +1114,16 @@ async def on_message(msg: Message) -> None:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
+
+        # Next step is to calculate map area for render.
+        if render_queue:
+            bbox = get_render_queue_bounds(render_queue)
+            zoom, lat, lon = calc_preview_area(bbox)
+            cluster, errors=await get_image_cluster(lat, lon, zoom)
+            File(map_save_path)
+            errorlog+=errors
+            cluster=render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon), image)
+            files.append(file)
 
         for username in users:
             try:
@@ -1113,7 +1133,8 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
-            file, errors = await get_image_cluster(lat, lon, zoom)
+            cluster, errors = await get_image_cluster(lat, lon, zoom)
+            file=File(map_save_path)
             errorlog += errors
             files.append(file)
 
