@@ -126,7 +126,7 @@ async def on_ready() -> None:
     print(" - " + "\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
-# I got annoyed by people using googlebad so often, so i implemented easter egg.
+# I got annoyed by people using googlebad so often, so i implemented an easter egg.
 recent_googles = set()
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
@@ -134,7 +134,8 @@ async def googlebad_command(ctx: SlashContext) -> None:
     global recent_googles
     time_now = time.time()
     recent_googles = set(filter(lambda x: x > time_now - 60, recent_googles)).union({time_now})
-    if len(recent_googles) > 11:  # Called every 5 seconds.
+    if len(recent_googles) > 11 and random.random() > 0.7:
+        # Alternative output is triggered at 30% chance after 12 /googlebads are used in 1 minute.
         recent_googles = set()
         await ctx.send(random.choice(ohnos).replace("...", "Whenever you use `/googlebad` command,"))
         return
@@ -375,8 +376,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     #     "&scale=1800&format=png"
     # )
     # embed.set_image(url=img_url)
-
-    # segments = elms_to_render()
+    # Image of element is handled separately.
 
     #### Fields ####
     if "info" in extras:
@@ -968,20 +968,20 @@ async def get_image_cluster(
     return Cluster, errorlog
 
 
-def draw_line(segment, draw):
+def draw_line(segment, draw, colour='red'):
     # https://stackoverflow.com/questions/59060887
     # This is polyline of all coordinates on array.
-    draw.line(segment, fill='red', width=2)
+    draw.line(segment, fill=colour, width=2)
 
 
-def draw_node(coord, draw):
+def draw_node(coord, draw, colour='red'):
     # https://stackoverflow.com/questions/2980366
     r=3
     x,y=coord
     leftUpPoint = (x-r, y-r)
     rightDownPoint = (x+r, y+r)
     twoPointList = [leftUpPoint, rightDownPoint]
-    draw.ellipse(twoPointList, fill=(255,0,0,255))
+    draw.ellipse(twoPointList, fill=colour)
 
 
 def render_elms_on_cluster(Cluster, render_queue, frag, image):
@@ -997,6 +997,9 @@ def render_elms_on_cluster(Cluster, render_queue, frag, image):
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
+    # Basic demo for colour picker.
+    colors = ['#000', '#700', '#f00', '#070', '#0f0', '#f60']
+    len_colors=len(colors)
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
             coord = render_queue[seg_num][i]
@@ -1006,10 +1009,11 @@ def render_elms_on_cluster(Cluster, render_queue, frag, image):
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
-        draw_node(render_queue[seg_num][0], draw)
-        draw_line(render_queue[seg_num], draw)
+        color=colors[seg_num%len_colors]
+        draw_node(render_queue[seg_num][0], draw, color)
+        draw_line(render_queue[seg_num], draw, color)
         for node_num in range(1,len(render_queue[seg_num])):
-            draw_node(render_queue[seg_num][node_num], draw)
+            draw_node(render_queue[seg_num][node_num], draw, color)
     Cluster.save(map_save_path)
     return Cluster
     # I barely know how to draw lines in PIL
