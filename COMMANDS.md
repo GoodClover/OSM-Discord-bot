@@ -55,7 +55,7 @@ You may just use a fragment by itself.
 
 `/googlebad` and `/josmtip`
 
-View a random message from the [ohno-OSM](/GoodClover/ohno-OSM) repo.
+View a random message from the [ohno-OSM](https://github.com/GoodClover/ohno-OSM) repo.
 
 ## Suggestions
 
