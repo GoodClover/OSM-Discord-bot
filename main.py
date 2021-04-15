@@ -1039,8 +1039,9 @@ async def on_raw_reaction_add(payload) -> None:
     msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
     # Safety check
     if (msg.author != client.user and msg.author != payload.member):
-        return
-    # Allow only users whom bot originally replied to.
+        return  # Delete message only if it's made by bot or the user who reacted.
+    # Allow only users whom bot originally replied to delete message.
+    # This portion of if-statements is not tested.
     if (msg.author == client.user and msg.reference):  # If bot replied to someone
         if not msg.reference.fail_if_not_exists:  # If replied message exists
             msg2 = await client.get_channel(msg.reference.channel_id).fetch_message(msg.reference.message_id)
@@ -1111,7 +1112,7 @@ async def on_message(msg: Message) -> None:
         files: list[File] = []
         errorlog: list[Str] = []
 
-        for elm_type, elm_ids in elms:
+        for elm_type, elm_ids, separator in elms:
             for elm_id in elm_ids:
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
@@ -1120,7 +1121,8 @@ async def on_message(msg: Message) -> None:
                     errorlog.append((elm_type, elm_id))
 
         for changeset_ids in changesets:
-            for changeset_id in changeset_ids:
+            # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
+            for changeset_id in changeset_ids[0]:
                 try:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
