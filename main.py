@@ -661,6 +661,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
         embed.add_field(name="Changesets", value=user["changesets"]["count"])
         embed.add_field(name="Traces", value=user["traces"]["count"])
         embed.add_field(name="Contributor Terms", value="Agreed" if user["contributor_terms"]["agreed"] else "Unknown")
+        embed.add_field(name="User since", value=user["account_created"][:10])
         if user["blocks"]["received"]["count"] > 0:
             embed.add_field(
                 name="Blocks",
