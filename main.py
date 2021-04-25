@@ -216,7 +216,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     embed.add_field(
         # This gets the emoji. Removes "s" from the end if it is there to do this.
         name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
-        value=(f"{d['count']} - {d['count_fraction']*100}%" + (f"\n{d['values']} values" if not value else ""))
+        value=(f"{d['count']} - {round(d['count_fraction']*100,2)}%" + (f"\n{d['values']} values" if not value else ""))
         if d["count"] > 0
         else "*None*",
         inline=False,
@@ -226,7 +226,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         embed.add_field(
             # This gets the emoji. Removes "s" from the end if it is there to do this.
             name=config["emoji"][d["type"] if d["type"][-1] != "s" else d["type"][:-1]] + " " + d["type"],
-            value=(f"{d['count']} - {d['count_fraction']*100}%" + (f"\n{d['values']} values" if not value else ""))
+            value=(f"{d['count']} - {round(d['count_fraction']*100,2)}%" + (f"\n{d['values']} values" if not value else ""))
             if d["count"] > 0
             else "*None*",
             inline=True,
