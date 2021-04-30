@@ -26,7 +26,8 @@ from PIL import ImageDraw  # For drawing elements
 
 try:
     import overpy
-    overpass_api = overpy.Overpass()
+    Overpass_URL = 'https://overpass.kumi.systems/api/interpreter'
+    overpass_api = overpy.Overpass(url=Overpass_URL)
 except ModuleNotFoundError:
     print('OverPy was not found')
 
@@ -726,16 +727,8 @@ def bits_to_frag(matches):
 def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     # I have no clue how this works.
     # Taken from https://github.com/ForgottenHero/mr-maps
-    lat_rad = math.radians(lat_deg)
-    n = 2.0 ** zoom
-    xtile = int((lon_deg + 180.0) / 360.0 * n)
-    # Sets safety bounds on vertical tile range.
-    if lat_deg >= 89:
-        return (xtile, 0)
-    if lat_deg <= -89:
-        return (xtile, n - 1)
-    ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
-    return (xtile, max(min(n - 1, ytile), 0))
+    # Previously this function was same as deg2tile_float, but output was rounded down.
+    return tuple(map(int, deg2tile_float(lat_deg, lon_deg, zoom)))
 
 
 def tile2deg(zoom, x, y):
@@ -743,7 +736,7 @@ def tile2deg(zoom, x, y):
     lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
     lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
     lat = lat_rad * 180.0 / math.pi
-    # Handling latitude out of range is not necessarry
+    # Handling latitude out of range is not necessary
     # longitude maps linearly to map, so we simply scale:
     lng = -180.0 + (360.0 * x / (2 ** zoom) % 360)
     return (lat, lng)
@@ -765,18 +758,19 @@ def deg2tile_float(lat_deg, lon_deg, zoom):
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type, elem_id):
+def elms_to_render(elem_type, elem_id, no_reduction=False):
     # Inputs:   element_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
     # Example: elms_to_render('relation', '60189')  (Russia)
+    # To be tested with relation 908054 - Public transport network of Sofia.
     # Possible alternative approach to rendering by creating very rough drawing on bot-side.
     # Using overpass to query just geometry.
     # And then draw just very few nodes onto map retrieved by showmap
     # Even easier alternative is drawing bounding box
     # Throws IndexError if element was not found
     # Needs handling for Overpass's over quota error.
-    result = overpass_api.query('[out:json][timeout:15];' + elem_type + '(' + str(elem_id) + ');out skel geom;')
+    result = overpass_api.query('[out:json][timeout:15];' + elem_type + '(id:' + str(elem_id) + ');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
     if elem_type == 'relation':
@@ -790,41 +784,62 @@ def elms_to_render(elem_type, elem_id):
             # Skip elements based on role... May cause a bug.
             # It did cause a bug due with route relations.
             # Everything that can be rendered are rendered now.
-            geom = elems[i].geometry
-            if geom is None:  # Single node as member of relation
+            # New, recursive approach.
+            if type(elems[i]) == overpy.RelationRelation:
+                seg=elms_to_render('relation', elems[i].ref, True)
+                segments+=seg
+            elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
                 segments.append([(float(elems[i].attributes['lat']), float(elems[i].attributes['lon']))])
-                continue
-            first = (float(geom[0].lat), float(geom[0].lon))
-            last = (float(geom[-1].lat), float(geom[-1].lon))
-            # Adding and removing elements is faster at end of list
-            if first in seg_ends:
-                # Append current segment to end of existing one
-                segments[seg_ends[first]] += geom[1:]
-                seg_ends[last] = seg_ends[first]
-                del seg_ends[first]
-            elif last in seg_ends:
-                # Append current segment to beginning of existing one
-                segments[seg_ends[last]] += geom[:-1]
-                seg_ends[first] = seg_ends[last]
-                del seg_ends[last]
-            else:
-                # Create new segment
-                segments.append(geom)
-                seg_ends[last] = len(segments) - 1
-                seg_ends[first] = len(segments) - 1
-            # This approach has potential error in case some ways of relation are reversed.
+                
+            elif type(elems[i]) == overpy.RelationWay:
+                geom = elems[i].geometry
+                segments.append(list(map(lambda x: (float(x.lat), float(x.lon)), geom)))
     if elem_type == 'way':
-        segments = []  # Simplified variant of relations' code
         elems = result.ways[0]
-        segments.append(elems.get_nodes(True))  # True means resolving node references?
+        segments = [list(map(lambda x: (float(x.lat), float(x.lon)), elems.get_nodes(True)))]  # True means resolving node references.
     if elem_type == 'node':
         # Creates simply a single-node segment.
         segments = [[result.nodes[0]]]
-    Limiter_offset = 50
-    Reduction_factor = 2
+    if no_reduction:
+        return segments
+    #segments=merge_segments(segments)
+    segments = reduce_segment_nodes(segments)
+    # We now have list of lists of (lat, lon) coordinates to be rendered.
+    # These lists of segments can be joined, if multiple elements are requested
+    # In order to add support for colours, just create segment-colour pairs.
+    return segments
+
+
+def merge_segments(segments):
+    # Other bug occurs in case some ways of relation are reversed.
+    seg_ends=dict()
+    # first = (float(geom[0].lat), float(geom[0].lon))
+    # last = (float(geom[-1].lat), float(geom[-1].lon))
+    # # Adding and removing elements is faster at end of list
+    # if first in seg_ends:
+    #     # Append current segment to end of existing one
+    #     segments[seg_ends[first]] += geom[1:]
+    #     seg_ends[last] = seg_ends[first]
+    #     del seg_ends[first]
+    # elif last in seg_ends:
+    #     # Append current segment to beginning of existing one
+    #     segments[seg_ends[last]] += geom[:-1]
+    #     seg_ends[first] = seg_ends[last]
+    #     del seg_ends[last]
+    # else:
+    #     # Create new segment
+    #     segments.append(geom)
+    #     seg_ends[last] = len(segments) - 1
+    #     seg_ends[first] = len(segments) - 1
+    return segments
+
+
+def reduce_segment_nodes(segments):
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
     # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
+    Limiter_offset = 50
+    Reduction_factor = 2
     calc_limit = lambda x: x if x < Limiter_offset else int(
         (x - Limiter_offset) ** (1 / Reduction_factor) + Limiter_offset)
     for seg_num in range(len(segments)):
@@ -844,11 +859,11 @@ def elms_to_render(elem_type, elem_id):
             segments[seg_num] = list(map(lambda x: (float(x.lat), float(x.lon)), temp_array))
         except AttributeError:
             pass  # Encountered relation node, see ln 794
-
-    # We now have list of lists of (lat, lon) coordinates to be rendered.
-    # These lists of segments can be joined, if multiple elements are requested
-    # In order to add support for colours, just create segment-colour pairs.
-    return segments
+    reduced = list(map(list, set(map(tuple, segments))))
+    print(len(segments), len(reduced))
+    # with elms_to_render('relation','908054')
+    # Result:  15458 vs 6564
+    return reduced
 
 
 def get_render_queue_bounds(queue):
