@@ -1073,7 +1073,7 @@ async def on_raw_reaction_add(payload) -> None:
 
 ### Inline linking ###
 ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(?:s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
@@ -1098,7 +1098,7 @@ async def on_message(msg: Message) -> None:
     # elm[1] - separator used
     # elm[2] - element ID
     elms = [(elm[0], tuple(re.findall('\d+', elm[2])), elm[1]) for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)]
-    changesets = [tuple(re.findall('\d+', elm[2]), elm[1]) for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
+    changesets = [(elm[0], tuple(re.findall('\d+', elm[2])), elm[1]) for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
     map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
@@ -1106,7 +1106,7 @@ async def on_message(msg: Message) -> None:
         return
     ask_confirmation = False
     for match in elms + changesets:
-        if match[2] != '/':  # Found case when user didn't use standard node/123 format
+        if match[2] != '/' or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
             ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
     if ask_confirmation:
@@ -1141,13 +1141,13 @@ async def on_message(msg: Message) -> None:
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
-        for changeset_ids in changesets:
+        for elm_type, changeset_ids, separator in changesets:
             # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
-            for changeset_id in changeset_ids[0]:
+            for changeset_id in changeset_ids:
                 try:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
-                    errorlog.append((elm_type, elm_id))
+                    errorlog.append((elm_type, changeset_id))
 
         # Next step is to calculate map area for render.
         if render_queue:
