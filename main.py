@@ -1008,7 +1008,7 @@ def draw_node(coord, draw, colour='red'):
     draw.ellipse(twoPointList, fill=colour)
 
 
-def render_elms_on_cluster(Cluster, render_queue, frag, image):
+def render_elms_on_cluster(Cluster, render_queue, frag):
     # Inputs:   Cluster - PIL image
     #           render_queue - [[(lat, lon), ...], ...]
     #           frag  - zoom, lat, lon used  for cluster rendering input.
@@ -1154,9 +1154,9 @@ async def on_message(msg: Message) -> None:
             bbox = get_render_queue_bounds(render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             cluster, errors=await get_image_cluster(lat, lon, zoom)
-            File(map_save_path)
             errorlog+=errors
-            cluster=render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon), image)
+            cluster=render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+            file=File(map_save_path)
             files.append(file)
 
         for username in users:
