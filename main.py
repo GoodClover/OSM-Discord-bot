@@ -719,8 +719,8 @@ def frag_to_bits(URL: str) -> tuple[int, float, float]:
     return int(zoom), float(lat), float(lon)
 
 
-def bits_to_frag(matches):
-    zoom, lat, lon = matches
+def bits_to_frag(match):
+    zoom, lat, lon = match
     return f"#map={zoom}/{lat}/{lon}"
 
 
@@ -770,6 +770,7 @@ def elms_to_render(elem_type, elem_id, no_reduction=False):
     # Even easier alternative is drawing bounding box
     # Throws IndexError if element was not found
     # Needs handling for Overpass's over quota error.
+    # Future improvement possibility: include tags into output to control rendering, especially colours.
     result = overpass_api.query('[out:json][timeout:15];' + elem_type + '(id:' + str(elem_id) + ');out skel geom;')
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
@@ -778,12 +779,8 @@ def elms_to_render(elem_type, elem_id, no_reduction=False):
         seg_ends = dict()
         elems = result.relations[0].members
         prev_last = None
-        # Merges some ways together. For russia, around 4000 ways became 34 segments.
         for i in range(len(elems)):
-            # if elems[i].role not in ['inner','outer'] :
-            # Skip elements based on role... May cause a bug.
-            # It did cause a bug due with route relations.
-            # Everything that can be rendered are rendered now.
+            # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
                 seg=elms_to_render('relation', elems[i].ref, True)
@@ -794,12 +791,14 @@ def elms_to_render(elem_type, elem_id, no_reduction=False):
             elif type(elems[i]) == overpy.RelationWay:
                 geom = elems[i].geometry
                 segments.append(list(map(lambda x: (float(x.lat), float(x.lon)), geom)))
-    if elem_type == 'way':
+    elif elem_type == 'way':
         elems = result.ways[0]
         segments = [list(map(lambda x: (float(x.lat), float(x.lon)), elems.get_nodes(True)))]  # True means resolving node references.
-    if elem_type == 'node':
+    elif elem_type == 'node':
         # Creates simply a single-node segment.
-        segments = [[result.nodes[0]]]
+        segments = [[float(result.nodes[0].lat), float(result.nodes[0].lon)]]
+    else:  # If encountered unknown element type.
+        return []
     if no_reduction:
         return segments
     #segments=merge_segments(segments)
@@ -812,6 +811,8 @@ def elms_to_render(elem_type, elem_id, no_reduction=False):
 
 def merge_segments(segments):
     # Other bug occurs in case some ways of relation are reversed.
+    # Ideally, this should merge two segments, if they share same end and beginning node.
+    # Merges some ways together. For russia, around 4000 ways became 34 segments.
     seg_ends=dict()
     # first = (float(geom[0].lat), float(geom[0].lon))
     # last = (float(geom[-1].lat), float(geom[-1].lon))
@@ -838,8 +839,8 @@ def reduce_segment_nodes(segments):
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
     # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
-    Limiter_offset = 50
-    Reduction_factor = 2
+    Limiter_offset = 50  # Minimum number of nodes.
+    Reduction_factor = 2  # n-th root by which array length is reduced.
     calc_limit = lambda x: x if x < Limiter_offset else int(
         (x - Limiter_offset) ** (1 / Reduction_factor) + Limiter_offset)
     for seg_num in range(len(segments)):
@@ -878,7 +879,7 @@ def get_render_queue_bounds(queue):
             if lat < min_lat: min_lat = round(lat, precision)
             if lon > max_lon: max_lon = round(lon, precision)
             if lon < min_lon: min_lon = round(lon, precision)
-    if min_lat == max_lat:  # In event when all coordinates are same
+    if min_lat == max_lat:  # In event when all coordinates are same...
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
     if min_lon == max_lon:  # Add small variation to not end up in ZeroDivisionError
@@ -943,7 +944,7 @@ async def get_image_cluster_old(
         j = j + 1
     Cluster.save(map_save_path)
     # return File(map_save_path)
-    return Cluster 
+    return Cluster
 
 
 def get_image_tile_range(
@@ -999,10 +1000,10 @@ def draw_line(segment, draw, colour='red'):
 
 def draw_node(coord, draw, colour='red'):
     # https://stackoverflow.com/questions/2980366
-    r=3
-    x,y=coord
-    leftUpPoint = (x-r, y-r)
-    rightDownPoint = (x+r, y+r)
+    r = 3
+    x, y = coord
+    leftUpPoint = (x - r, y - r)
+    rightDownPoint = (x + r, y + r)
     twoPointList = [leftUpPoint, rightDownPoint]
     draw.ellipse(twoPointList, fill=colour)
 
@@ -1022,7 +1023,7 @@ def render_elms_on_cluster(Cluster, render_queue, frag, image):
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
     # Basic demo for colour picker.
     colors = ['#000', '#700', '#f00', '#070', '#0f0', '#f60']
-    len_colors=len(colors)
+    len_colors = len(colors)
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
             coord = render_queue[seg_num][i]
@@ -1032,11 +1033,15 @@ def render_elms_on_cluster(Cluster, render_queue, frag, image):
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
-        color=colors[seg_num%len_colors]
-        draw_node(render_queue[seg_num][0], draw, color)
+        color = colors[seg_num % len_colors]
         draw_line(render_queue[seg_num], draw, color)
-        for node_num in range(1,len(render_queue[seg_num])):
-            draw_node(render_queue[seg_num][node_num], draw, color)
+        # Maybe nodes shouldn't be rendered, if way has many, let's say 80+ nodes, 
+        # because it would become too cluttered?
+        if len(render_queue[seg_num]) < 80:
+            draw_node(render_queue[seg_num][0], draw, color)
+            if len(render_queue[seg_num]) > 1:
+                for node_num in range(1, len(render_queue[seg_num])):
+                    draw_node(render_queue[seg_num][node_num], draw, color)
     Cluster.save(map_save_path)
     return Cluster
     # I barely know how to draw lines in PIL
