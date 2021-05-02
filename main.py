@@ -982,17 +982,19 @@ async def get_image_cluster(
     # Following line is duplicataed at calc_preview_area()
     n = 2.0 ** zoom  # N is number of tiles in one direction on zoom level
     tile_w, tile_h = 256, 256
-
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
+    tile_offset=deg2tile_float(lat_deg, lon_deg, zoom)
+    # tile_offset - By how many tiles should tile grid shifted up left.
+    tile_offset=(tile_offset[0] % 1, tile_offset[1] % 1)
     Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
-    for xtile in range(xmin, xmax + 1):
+    for xtile in range(xmin, xmax + 2):
         xtile = xtile % n  # Repeats tiles across -180/180 meridian.
-        for ytile in range(ymin, ymax + 1):
+        for ytile in range(ymin, ymax + 2):
             try:
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, box=((xtile - xmin) * tile_w, (ytile - ymin) * tile_h))
+                Cluster.paste(tile, box=((xtile - xmin - tile_offset[0]) * tile_w, (ytile - ymin - tile_offset[1]) * tile_h))
             except Exception as e:
                 print(e)
                 errorlog.append(('map tile', tile_url.format(zoom=zoom, x=xtile, y=ytile)))
@@ -1029,6 +1031,9 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
+    tile_offset=deg2tile_float(lat_deg, lon_deg, zoom)
+    # tile_offset - By how many tiles should tile grid shifted up left.
+    tile_offset=(tile_offset[0] % 1, tile_offset[1] % 1)
     # Basic demo for colour picker.
     colors = ['#000', '#700', '#f00', '#070', '#0f0', '#f60']
     len_colors = len(colors)
@@ -1037,7 +1042,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             coord = render_queue[seg_num][i]
             # Following returns X/Y similar to tile number, but as floats.
             coord = deg2tile_float(coord[0], coord[1], zoom)
-            coord = round((coord[0] - xmin) * tile_w), round((coord[1] - ymin) * tile_h)
+            coord = round((coord[0] - xmin - tile_offset[0]) * tile_w), round((coord[1] - ymin - tile_offset[1]) * tile_h)
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
