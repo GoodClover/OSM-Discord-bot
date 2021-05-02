@@ -727,7 +727,7 @@ def frag_to_bits(URL: str) -> tuple[int, float, float]:
     return int(zoom), float(lat), float(lon)
 
 
-def bits_to_frag(match: tuple[int, float, float]): -> str
+def bits_to_frag(match: tuple[int, float, float]) -> str:
     zoom, lat, lon = match
     return f"#map={zoom}/{lat}/{lon}"
 
@@ -739,7 +739,7 @@ def deg2tile(lat_deg: float, lon_deg: float, zoom: int): -> tuple[int, int]
     return tuple(map(int, deg2tile_float(lat_deg, lon_deg, zoom)))
 
 
-def tile2deg(zoom: int, x: int, y: int): -> tuple[float, float]
+def tile2deg(zoom: int, x: int, y: int) -> tuple[float, float]:
     # Gets top-left coordinate of tile.
     lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
     lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
@@ -750,7 +750,7 @@ def tile2deg(zoom: int, x: int, y: int): -> tuple[float, float]
     return (lat, lng)
 
 
-def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int): -> tuple[int, int]
+def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     # This is not really supposed to work, but it works.
     # By removing rounding down from deg2tile function, we can estimate
     # position where to draw coordinates during element export.
@@ -766,7 +766,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int): -> tuple[int, int
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type: str, elem_id: str | int, no_reduction=False: bool): -> list[list[tuple[float, float]]]
+def elms_to_render(elem_type: str, elem_id: str | int, no_reduction=False: bool) -> list[list[tuple[float, float]]]:
     # Inputs:   element_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -843,7 +843,7 @@ def merge_segments(segments: list[list[tuple[float, float]]]): -> list[list[tupl
     return segments
 
 
-def reduce_segment_nodes(segments: list[list[tuple[float, float]]]): -> list[list[tuple[float, float]]]
+def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
     # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
@@ -896,7 +896,7 @@ def get_render_queue_bounds(segments: list[list[tuple[float, float]]]): -> tuple
     return (min_lat, max_lat, min_lon, max_lon)
 
 
-def calc_preview_area(queue_bounds: tuple[float, float, float, float]): -> tuple[int, float, float]
+def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[int, float, float]:
     # Input: tuple (min_lat, max_lat, min_lon, max_lon)
     # Output: tuple (int(zoom), float(lat), float(lon))
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
@@ -1008,7 +1008,7 @@ def draw_line(segment: list[tuple[float, float]], draw, colour='red'): -> None
     draw.line(segment, fill=colour, width=2)
 
 
-def draw_node(coord: tuple[float, float], draw, colour='red'): -> None
+def draw_node(coord: tuple[float, float], draw, colour='red') -> None:
     # https://stackoverflow.com/questions/2980366
     r = 3
     x, y = coord
