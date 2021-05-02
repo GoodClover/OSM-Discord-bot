@@ -124,10 +124,18 @@ def user_to_mention(user: Member) -> str:
 @client.event  # type: ignore
 async def on_ready() -> None:
     print(f"{client.user} is connected to the following guilds:\n")
-    print(" - " + "\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
+    for guild in client.guilds:
+        try:
+            # Update member count when bot starts up
+            await update_member_count(member.guild)
+        except:
+            pass
+        print(f" - {guild.name}: {guild.id}")
+    # print(" - " + "\n - ".join([f"{guild.name}: {guild.id}" for guild in client.guilds]))
 
 
 # I got annoyed by people using googlebad so often, so i implemented an easter egg.
+# Set of unix timestamps.
 recent_googles = set()
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
@@ -607,7 +615,7 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
     await ctx.send(embed=user_embed(user, extras_list))
 
 
-def get_id_from_username(username) -> int:
+def get_id_from_username(username: str, ) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
     if len(whosthat) > 0:
         return whosthat[0]["id"]
@@ -719,19 +727,19 @@ def frag_to_bits(URL: str) -> tuple[int, float, float]:
     return int(zoom), float(lat), float(lon)
 
 
-def bits_to_frag(match):
+def bits_to_frag(match: tuple[int, float, float]): -> str
     zoom, lat, lon = match
     return f"#map={zoom}/{lat}/{lon}"
 
 
-def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
+def deg2tile(lat_deg: float, lon_deg: float, zoom: int): -> tuple[int, int]
     # I have no clue how this works.
     # Taken from https://github.com/ForgottenHero/mr-maps
     # Previously this function was same as deg2tile_float, but output was rounded down.
     return tuple(map(int, deg2tile_float(lat_deg, lon_deg, zoom)))
 
 
-def tile2deg(zoom, x, y):
+def tile2deg(zoom: int, x: int, y: int): -> tuple[float, float]
     # Gets top-left coordinate of tile.
     lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
     lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
@@ -742,7 +750,7 @@ def tile2deg(zoom, x, y):
     return (lat, lng)
 
 
-def deg2tile_float(lat_deg, lon_deg, zoom):
+def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int): -> tuple[int, int]
     # This is not really supposed to work, but it works.
     # By removing rounding down from deg2tile function, we can estimate
     # position where to draw coordinates during element export.
@@ -758,7 +766,7 @@ def deg2tile_float(lat_deg, lon_deg, zoom):
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type, elem_id, no_reduction=False):
+def elms_to_render(elem_type: str, elem_id: str | int, no_reduction=False: bool): -> list[list[tuple[float, float]]]
     # Inputs:   element_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -809,7 +817,7 @@ def elms_to_render(elem_type, elem_id, no_reduction=False):
     return segments
 
 
-def merge_segments(segments):
+def merge_segments(segments: list[list[tuple[float, float]]]): -> list[list[tuple[float, float]]]
     # Other bug occurs in case some ways of relation are reversed.
     # Ideally, this should merge two segments, if they share same end and beginning node.
     # Merges some ways together. For russia, around 4000 ways became 34 segments.
@@ -835,7 +843,7 @@ def merge_segments(segments):
     return segments
 
 
-def reduce_segment_nodes(segments):
+def reduce_segment_nodes(segments: list[list[tuple[float, float]]]): -> list[list[tuple[float, float]]]
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
     # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
@@ -867,12 +875,12 @@ def reduce_segment_nodes(segments):
     return reduced
 
 
-def get_render_queue_bounds(queue):
-    # Finds bounding box of rendering queue
+def get_render_queue_bounds(segments: list[list[tuple[float, float]]]): -> tuple[float, float, float, float]
+    # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90, -90, 180, -180
     precision = 5  # https://xkcd.com/2170/
-    for segment in queue:
+    for segment in segments:
         for coordinates in segment:
             lat, lon = coordinates
             if lat > max_lat: max_lat = round(lat, precision)
@@ -888,7 +896,7 @@ def get_render_queue_bounds(queue):
     return (min_lat, max_lat, min_lon, max_lon)
 
 
-def calc_preview_area(queue_bounds):
+def calc_preview_area(queue_bounds: tuple[float, float, float, float]): -> tuple[int, float, float]
     # Input: tuple (min_lat, max_lat, min_lon, max_lon)
     # Output: tuple (int(zoom), float(lat), float(lon))
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
@@ -950,7 +958,7 @@ async def get_image_cluster_old(
 def get_image_tile_range(
         lat_deg: float,
         lon_deg: float,
-        zoom: int):
+        zoom: int) -> tuple[int, int, int, int]:
     # Following line is duplicataed at calc_preview_area()
     tiles_x, tiles_y = 5, 5
     center_x, center_y = deg2tile(lat_deg, lon_deg, zoom)
@@ -992,13 +1000,13 @@ async def get_image_cluster(
     return Cluster, errorlog
 
 
-def draw_line(segment, draw, colour='red'):
+def draw_line(segment: list[tuple[float, float]], draw, colour='red'): -> None
     # https://stackoverflow.com/questions/59060887
     # This is polyline of all coordinates on array.
     draw.line(segment, fill=colour, width=2)
 
 
-def draw_node(coord, draw, colour='red'):
+def draw_node(coord: tuple[float, float], draw, colour='red'): -> None
     # https://stackoverflow.com/questions/2980366
     r = 3
     x, y = coord
@@ -1008,7 +1016,7 @@ def draw_node(coord, draw, colour='red'):
     draw.ellipse(twoPointList, fill=colour)
 
 
-def render_elms_on_cluster(Cluster, render_queue, frag):
+def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]], frag: Iterable[int, float, float]):
     # Inputs:   Cluster - PIL image
     #           render_queue - [[(lat, lon), ...], ...]
     #           frag  - zoom, lat, lon used  for cluster rendering input.
@@ -1048,7 +1056,7 @@ def render_elms_on_cluster(Cluster, render_queue, frag):
 
 
 @client.event  # type: ignore
-async def on_raw_reaction_add(payload) -> None:
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     # Probably needs testing. It should maybe remove bot's own message,
     # if someone reacts with wastebasket emoji
     # For safety reasons, it should also authenticate reacting user
@@ -1190,7 +1198,6 @@ async def on_message(msg: Message) -> None:
 
 
 ### Member count ###
-# It needs solution to update member count when bot is started
 @client.event  # type: ignore
 async def on_member_join(member: Member) -> None:
     await update_member_count(member.guild)
