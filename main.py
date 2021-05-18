@@ -957,8 +957,9 @@ async def get_image_cluster_old(
             except Exception as e:
                 print(e)
         j = j + 1
-    Cluster.save(config["map_save_file"])
-    # return File(config["map_save_file"])
+    filename = config["map_save_file"].format(t=time.time())
+    Cluster.save(filename)
+    # return File(filename)
     return Cluster
 
 
@@ -983,7 +984,7 @@ async def get_image_cluster(
     lon_deg: float,
     zoom: int,
     tile_url: str = config["tile_url"],
-) -> File:
+) -> tuple[File, str]:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
@@ -1001,13 +1002,18 @@ async def get_image_cluster(
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
                 Cluster.paste(
-                    tile, box=((xtile - xmin - tile_offset[0]) * tile_w, (ytile - ymin - tile_offset[1]) * tile_h)
+                    tile,
+                    box=(
+                        (xtile - xmin - int(tile_offset[0])) * tile_w,
+                        (ytile - ymin - int(tile_offset[1])) * tile_h,
+                    ),
                 )
             except Exception as e:
                 print(e)
                 errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile, y=ytile)))
-    Cluster.save(config["map_save_file"])
-    return Cluster, errorlog
+    filename = config["map_save_file"].format(t=time.time())
+    Cluster.save(filename)
+    return Cluster, filename, errorlog
 
 
 def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
@@ -1066,8 +1072,9 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             if len(render_queue[seg_num]) > 1:
                 for node_num in range(1, len(render_queue[seg_num])):
                     draw_node(render_queue[seg_num][node_num], draw, color)
-    Cluster.save(config["map_save_file"])
-    return Cluster
+    filename = config["map_save_file"].format(t=time.time())
+    Cluster.save(filename)
+    return Cluster, filename
     # I barely know how to draw lines in PIL
 
 
@@ -1159,7 +1166,7 @@ async def on_message(msg: Message) -> None:
     async with msg.channel.typing():
         # Create the messages
         embeds: list[Embed] = []
-        files: list[File] = []
+        files: list[File, str] = []
         errorlog = []
 
         for elm_type, elm_ids, separator in elms:
@@ -1182,11 +1189,11 @@ async def on_message(msg: Message) -> None:
         if render_queue:
             bbox = get_render_queue_bounds(render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
-            cluster, errors = await get_image_cluster(lat, lon, zoom)
+            cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
-            file = File(config["map_save_file"])
-            files.append(file)
+            file = File(filename)
+            files.append((file, filename))
 
         for username in users:
             try:
@@ -1196,26 +1203,32 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             zoom, lat, lon = frag_to_bits(map_frag)
-            cluster, errors = await get_image_cluster(lat, lon, zoom)
-            file = File(config["map_save_file"])
+            cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+            file = File(filename)
             errorlog += errors
-            files.append(file)
+            files.append((file, filename))
 
         # Send the messages
         if len(embeds) > 0:
             await msg.channel.send(embed=embeds[0], reference=msg)
             for embed in embeds[1:]:
                 await msg.channel.send(embed=embed)
-            for file in files:
+            for file, filename in files:
                 await msg.channel.send(file=file)
+
         # Sending files is also handled in embeds messaging.
         elif len(files) > 0:
             await msg.channel.send(file=files[0], reference=msg)
-            for file in files[1:]:
+            for file, filename in files[1:]:
                 await msg.channel.send(file=file)
+
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
-                await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+                pass  # await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+
+    # Clean up files
+    for file, filename in files:
+        os.remove(filename)
 
 
 ### Member count ###
