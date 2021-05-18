@@ -266,7 +266,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     guild_ids=guild_ids,
     options=[
         create_option(
-            name="type",
+            name="elm_type",
             description="The element's type",
             option_type=3,
             required=True,
@@ -277,7 +277,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
             ],
         ),
         create_option(
-            name="ID",
+            name="elm_id",
             description="ID of the element",
             option_type=4,
             required=True,
@@ -463,7 +463,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     guild_ids=guild_ids,
     options=[
         create_option(
-            name="ID",
+            name="changeset_id",
             description="ID of the changeset",
             option_type=4,
             required=True,
@@ -686,16 +686,16 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     guild_ids=guild_ids,
     options=[
         create_option(
-            name="URL",
+            name="url",
             description="URL that ends in a fragment, or just the fragment. e.g. `#map=19/33.45169/126.48982`",
             option_type=3,
             required=True,
         )
     ],
 )  # type: ignore
-async def showmap_command(ctx: SlashContext, URL: str) -> None:
+async def showmap_command(ctx: SlashContext, url: str) -> None:
     try:
-        zoom_int, lat_deg, lon_deg = frag_to_bits(URL)
+        zoom_int, lat_deg, lon_deg = frag_to_bits(url)
     except ValueError:
         await ctx.send("Invalid map fragment. Expected to be in format `#map=zoom/lat/lon`", hidden=True)
         return
@@ -1243,7 +1243,7 @@ async def update_member_count(guild: Guild) -> None:
     guild_ids=guild_ids,
     options=[
         create_option(
-            name="Suggestion",
+            name="suggestion",
             description="Your suggestion, be sensible.",
             option_type=3,
             required=True,
@@ -1286,7 +1286,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     guild_ids=guild_ids,
     options=[
         create_option(
-            name="ID",
+            name="msg_id",
             description="The message ID of the suggestion. With developer mode on, right click the message → `Copy ID`",
             option_type=3,
             required=True,
