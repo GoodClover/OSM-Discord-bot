@@ -1336,4 +1336,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
 if __name__ == "__main__":
     load_dotenv()
-    client.run(os.getenv("DISCORD_TOKEN"))
+    if os.getenv("TESTING") == "True":
+        client.run(os.getenv("DISCORD_TESTING_TOKEN"))
+    else:
+        client.run(os.getenv("DISCORD_TOKEN"))

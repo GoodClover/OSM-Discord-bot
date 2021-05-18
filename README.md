@@ -28,6 +28,8 @@ Make a `.env` (nothing before the dot) containing:
 
 ```env
 DISCORD_TOKEN=<bot-token>
+TESTING=<False> or <True>
+DISCORD_TESTING_TOKEN=<optional-testing-bot-token>
 ```
 
 ## License
