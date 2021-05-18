@@ -39,8 +39,7 @@ def load_config() -> None:
     # LINK - config.json
     with open("config.json", "r", encoding="utf8") as file:
         config = json.loads(file.read())
-    # guild_ids = [int(x) for x in config["server_settings"].keys()]
-    guild_ids = [735922875931820033, 413070382636072960]  # FIXME: Temporary whilst testing.
+    guild_ids = [int(x) for x in config["server_settings"].keys()]
 
 
 def save_config() -> None:
