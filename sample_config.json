@@ -1,6 +1,7 @@
 {
     "ohno_file": "../ohno-OSM/ohno.md",
     "josm_tips_file": "../ohno-OSM/josm_tips.md",
+    "map_save_file": "data/cluster.png",
     "autodelete_delay": 4,
     "thumb_size": 512,
     "site_url": "https://www.openstreetmap.org/",
@@ -10,6 +11,7 @@
     "tile_url": "http://a.tile.openstreetmap.org/{zoom}/{x}/{y}.png",
     "icon_url": "https://wiki.openstreetmap.org/w/images/c/c8/Public-images-osm_logo.png",
     "taginfo_icon_url": "https://wiki.openstreetmap.org/w/images/3/32/TagInfo_logo.png",
+    "overpass_url": "https://overpass.kumi.systems/api/interpreter",
     "copyright_notice": "\u00a9 OpenStreetMap contributors, ODbL",
     "taginfo_copyright_notice": "\u00a9 OpenStreetMap contributors & taginfo, ODbL",
     "mappers_count_text": "🌐 Mappers={mappers}",
