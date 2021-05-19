@@ -32,6 +32,7 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
+cached_files: set = set()  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
 
 
 def load_config() -> None:
@@ -1189,12 +1190,14 @@ async def on_message(msg: Message) -> None:
 
     async with msg.channel.typing():
         # Create the messages
+        status_msg = await ctx.send("This is status message, that will show progress of your request.")
         embeds: list[Embed] = []
         files: list[File, str] = []
         errorlog = []
 
         for elm_type, elm_ids, separator in elms:
             for elm_id in elm_ids:
+                await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
                     render_queue += elms_to_render(elm_type, elm_id)
@@ -1204,6 +1207,7 @@ async def on_message(msg: Message) -> None:
         for elm_type, changeset_ids, separator in changesets:
             # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
             for changeset_id in changeset_ids:
+                await status_msg.edit(content=f"Processing {elm_type}/{changeset_id}.")
                 try:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
@@ -1218,19 +1222,23 @@ async def on_message(msg: Message) -> None:
             cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
             file = File(filename)
             files.append((file, filename))
+            cached_files.add(filename)
 
         for username in users:
+            await status_msg.edit(content=f"Processing user/{username}.")
             try:
                 embeds.append(user_embed(get_user(get_id_from_username(username))))
             except ValueError:
                 errorlog.append(("user", username))
 
         for map_frag in map_frags:
+            await status_msg.edit(content=f"Processing {map_frag}.")
             zoom, lat, lon = frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             file = File(filename)
             errorlog += errors
             files.append((file, filename))
+            cached_files.add(filename)
 
         # Send the messages
         if len(embeds) > 0:
@@ -1245,14 +1253,16 @@ async def on_message(msg: Message) -> None:
             await msg.channel.send(file=files[0], reference=msg)
             for file, filename in files[1:]:
                 await msg.channel.send(file=file)
+        await status_msg.delete()
 
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
                 pass  # await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
 
     # Clean up files
-    for file, filename in files:
+    for filename in cached_files:
         os.remove(filename)
+    cached_files = set()
 
 
 ### Member count ###
