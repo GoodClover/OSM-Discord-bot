@@ -34,6 +34,8 @@ DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
 cached_files: set = set()  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
 
+tile_w, tile_h = 256, 256  # Tile size used for renderer
+tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
 
 def load_config() -> None:
     global config, guild_ids
@@ -951,7 +953,6 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Finds map area, that should contain all elements.
 
     min_lat, max_lat, min_lon, max_lon = queue_bounds
-    tiles_x, tiles_y = 5, 5
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
     max_zoom = 19
@@ -989,7 +990,7 @@ async def get_image_cluster_old(
     j = 0
     xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
     xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * 256 - 1, (ymax - ymin + 1) * 256 - 1))
+    Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
     for xtile in range(xmin, xmax + 1):
         for ytile in range(ymin, ymax + 1):
             try:
@@ -1008,7 +1009,6 @@ async def get_image_cluster_old(
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int]:
     # Following line is duplicataed at calc_preview_area()
-    tiles_x, tiles_y = 5, 5
     center_x, center_y = deg2tile(lat_deg, lon_deg, zoom)
     xmin, xmax = center_x - int(tiles_x / 2), center_x + int(tiles_x / 2)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
@@ -1031,7 +1031,6 @@ async def get_image_cluster(
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    tile_w, tile_h = 256, 256
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
     tile_offset = deg2tile_float(lat_deg, lon_deg, zoom)
@@ -1085,7 +1084,6 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
     zoom, lat_deg, lon_deg = frag
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    tile_w, tile_h = 256, 256
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
