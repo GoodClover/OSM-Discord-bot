@@ -1332,9 +1332,10 @@ async def on_message(msg: Message) -> None:
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             # Start drawing elements on image.
-            cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
-            files.append(File(filename))
+            cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+            files.append(File(filename2))
             cached_files.add(filename)
+            cached_files.add(filename2)
 
         for username in users:
             await status_msg.edit(content=f"Processing user/{username}.")
