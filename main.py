@@ -810,7 +810,6 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     node_count = 0
     # Combining all queries together is much faster
     # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
-    # Also, script should pass status message to recursion to so script could provide better status update.
     if get_center:
         if 'center' in result.relations[0].attributes:
             center = result.relations[0].attributes['center']
@@ -921,20 +920,21 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
 def get_render_queue_bounds(segments: list[list[tuple[float, float]]]) -> tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
-    min_lat, max_lat, min_lon, max_lon = 90, -90, 180, -180
+    min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
     precision = 5  # https://xkcd.com/2170/
     for segment in segments:
         for coordinates in segment:
             lat, lon = coordinates
             # int() because type checker is an idiot
+            # Switching it to int kills the whole renderer!
             if lat > max_lat:
-                max_lat = int(round(lat, precision))
+                max_lat = float(round(lat, precision))
             if lat < min_lat:
-                min_lat = int(round(lat, precision))
+                min_lat = float(round(lat, precision))
             if lon > max_lon:
-                max_lon = int(round(lon, precision))
+                max_lon = float(round(lon, precision))
             if lon < min_lon:
-                min_lon = int(round(lon, precision))
+                min_lon = float(round(lon, precision))
     if min_lat == max_lat:  # In event when all coordinates are same...
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
@@ -954,12 +954,13 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     tiles_x, tiles_y = 5, 5
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
+    max_zoom = 19
     zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
     center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
     zoom_y = 22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
         zoom_y -= 1  # Bit slow and dumb approach
-    zoom = min(zoom_x, zoom_y, 19)
+    zoom = min(zoom_x, zoom_y, max_zoom)
     return (zoom, *center)
 
 
