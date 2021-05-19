@@ -1115,6 +1115,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
                 for node_num in range(1, len(render_queue[seg_num])):
                     draw_node(render_queue[seg_num][node_num], draw, color)
     filename = config["map_save_file"].format(t=time.time())
+    print(f"Saved drawn image as {filename}.")
     Cluster.save(filename)
     return Cluster, filename
     # I barely know how to draw lines in PIL
@@ -1237,12 +1238,13 @@ async def on_message(msg: Message) -> None:
                 except ValueError:
                     errorlog.append((elm_type, changeset_id))
 
-        # Next step is to calculate map area for render.
         if render_queue:
+            # Next step is to calculate map area for render.
             bbox = get_render_queue_bounds(render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
+            # Start drawing elements on image.
             cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
             file = File(filename)
             files.append((file, filename))
