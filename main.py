@@ -765,7 +765,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False):
+def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, recursion_depth=0):
     # Inputs:   elem_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -778,26 +778,38 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False):
     # Throws IndexError if element was not found
     # Needs handling for Overpass's over quota error.
     # Future improvement possibility: include tags into output to control rendering, especially colours.
+    # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
     if elem_type!="relation": get_bbox=False
-    elif elem_id==52411: get_bbox=True  # Don't you dare to query anything, that has Belgium in it. 
+    get_center = False
+    # Don't you dare to query anything, that has Belgium in it.
+    elif 2 < recursion_depth: get_bbox=True  
     if get_bbox: output_type="bb"
     else: output_type="skel geom"  # Original version
     Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
-    print(Q)
+    status_msg.edit("Querying `" + Q + "`")  # I hope this works. uncomment on live instance
+    # Above line may introduce error when running it from /element, not on_message.
     try:
         result = overpass_api.query(Q)
     except exception.OverpassRuntimeError:
         if not get_bbox:
-            return elms_to_render(elem_type, elem_id, no_reduction, True)
+            # recursion_depth is not increased, because this is retry of same element
+            return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth)
         else:
-            result = overpass_api.query(Q.replace('bb;', 'skel center;'))
+            Q = Q.replace('bb;', 'skel center;')
+            get_center = True
+            status_msg.edit("Querying `" + Q + "`") 
+            result = overpass_api.query(Q)
     # return result
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
     # Combining all queries together is much faster
     # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
     # Also, script should pass status message to recursion to so script could provide better status update.
-    if get_bbox:
+    if get_center:
+        if 'center' in result.relations[0].attributes:
+            center = result.relations[0].attributes['center']
+            return [[(float(center['lat']), float(center['lon']))]]
+    elif get_bbox:
         if 'bounds' in result.relations[0].attributes:
             bound=result.relations[0].attributes['bounds']
             # {'minlat': Decimal('59.4'), 'minlon': Decimal('24.6'), 'maxlat': Decimal('59.5'), 'maxlon': Decimal('24.7')
@@ -814,7 +826,7 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False):
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True, True)
+                seg = elms_to_render("relation", elems[i].ref, True, True, recursion_depth + 1)
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
 ;out skel geom;                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
