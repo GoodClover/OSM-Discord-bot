@@ -706,7 +706,7 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
     first_msg = await ctx.send("Getting image…")
     with ctx.channel.typing():
 
-        image_file, errorlog = await get_image_cluster(lat_deg, lon_deg, zoom_int)
+        image_file, filename, errorlog = await get_image_cluster(lat_deg, lon_deg, zoom_int)
 
         # TODO: I probabbly need to get some better injection protection at some point.
         # This works though so eh ¯\_(ツ)_/¯
@@ -996,7 +996,7 @@ async def get_image_cluster_old(
             try:
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, box=((xtile - xmin) * 256, (ytile - ymin) * 255))
+                Cluster.paste(tile, box=((xtile - xmin) * tile_w, (ytile - ymin) * tile_h))
                 i = i + 1
             except Exception as e:
                 print(e)
