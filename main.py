@@ -32,10 +32,13 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
-cached_files: set = set()  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+cached_files: set = (
+    set()
+)  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
 
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
+
 
 def load_config() -> None:
     global config, guild_ids
@@ -78,6 +81,10 @@ slash = SlashCommand(client, sync_commands=True)
 
 
 ## UTILS ##
+
+
+def is_powerful(member: Member, guild: Guild) -> bool:
+    return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
 
 
 def str_to_date(text: str) -> datetime:
@@ -767,7 +774,14 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, recursion_depth=0):
+async def elms_to_render(
+    elem_type,
+    elem_id,
+    no_reduction=False,
+    get_bbox=False,
+    recursion_depth=0,
+    status_msg: Message | None = None,
+):
     # Inputs:   elem_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -781,31 +795,34 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     # Needs handling for Overpass's over quota error.
     # Future improvement possibility: include tags into output to control rendering, especially colours.
     # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
+
     get_center = False
-    if elem_type!="relation":
+    if elem_type != "relation":
         get_bbox = False
     elif 1 < recursion_depth:
         get_center = True
     if get_bbox:
-        output_type="bb"
+        output_type = "bb"
     elif get_center:
-        output_type="center"
+        output_type = "center"
     else:
-        output_type="skel geom"  # Original version
-    Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
-    status_msg.edit("Querying `" + Q + "`")  # I hope this works. uncomment on live instance
+        output_type = "skel geom"  # Original version
+    Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out " + output_type + ";"
+    if status_msg:
+        await status_msg.edit(content="Querying `" + Q + "`")  # I hope this works. uncomment on live instance
     # Above line may introduce error when running it from /element, not on_message.
     try:
         result = overpass_api.query(Q)
     except exception.OverpassRuntimeError:
-        print('Overpass timeout')
+        print("Overpass timeout")
         if not get_bbox:
             # recursion_depth is not increased, because this is retry of same element
-            return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth)
+            return await elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth, status_msg=status_msg)
         else:
-            Q = Q.replace('bb;', 'skel center;')
+            Q = Q.replace("bb;", "skel center;")
             get_center = True
-            status_msg.edit("Querying `" + Q + "`") 
+            if status_msg:
+                await status_msg.edit("Querying `" + Q + "`")
             result = overpass_api.query(Q)
     # return result
     # Since we are querying for single element, top level result will have just 1 element.
@@ -813,18 +830,22 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     # Combining all queries together is much faster
     # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
     if get_center:
-        if 'center' in result.relations[0].attributes:
-            center = result.relations[0].attributes['center']
-            return [[(float(center['lat']), float(center['lon']))]]
+        if "center" in result.relations[0].attributes:
+            center = result.relations[0].attributes["center"]
+            return [[(float(center["lat"]), float(center["lon"]))]]
     elif get_bbox:
-        if 'bounds' in result.relations[0].attributes:
-            bound=result.relations[0].attributes['bounds']
+        if "bounds" in result.relations[0].attributes:
+            bound = result.relations[0].attributes["bounds"]
             # {'minlat': Decimal('59.4'), 'minlon': Decimal('24.6'), 'maxlat': Decimal('59.5'), 'maxlon': Decimal('24.7')
-            return [[(float(bound['minlat']), float(bound['minlon'])),
-		 (float(bound['minlat']), float(bound['maxlon'])),
-		 (float(bound['maxlat']), float(bound['maxlon'])),
-		 (float(bound['maxlat']), float(bound['minlon'])),
-		 (float(bound['minlat']), float(bound['minlon']))]]
+            return [
+                [
+                    (float(bound["minlat"]), float(bound["minlon"])),
+                    (float(bound["minlat"]), float(bound["maxlon"])),
+                    (float(bound["maxlat"]), float(bound["maxlon"])),
+                    (float(bound["maxlat"]), float(bound["minlon"])),
+                    (float(bound["minlat"]), float(bound["minlon"])),
+                ]
+            ]
     if elem_type == "relation":
         segments = []
         elems = result.relations[0].members
@@ -833,7 +854,9 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True, get_bbox, recursion_depth + 1)
+                seg = await elms_to_render(
+                    "relation", elems[i].ref, True, get_bbox, recursion_depth + 1, status_msg=status_msg
+                )
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
                 segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
@@ -1121,27 +1144,30 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
 
 @client.event  # type: ignore
-async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
-    # Probably needs testing. It should maybe remove bot's own message,
-    # if someone reacts with wastebasket emoji
-    # For safety reasons, it should also authenticate reacting user
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
-    waste_basket = "🗑️"
-    if payload.emoji.name.encode("utf8") != waste_basket:
-        return
-    # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
-    msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
-    # Safety check
-    if msg.author != client.user and msg.author != payload.member:
-        return  # Delete message only if it's made by bot or the user who reacted.
-    # Allow only users whom bot originally replied to delete message.
-    # This portion of if-statements is not tested.
-    if msg.author == client.user and msg.reference:  # If bot replied to someone
-        if not msg.reference.fail_if_not_exists:  # If replied message exists
-            msg2 = await client.get_channel(msg.reference.channel_id).fetch_message(msg.reference.message_id)
-            if msg2.author != payload.member:  # If current reacting user isn't author of original message
-                return  # who added reaction.
-    await msg.delete()
+    # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
+    if payload.emoji.name == "🗑️":
+        # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
+        msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
+
+        if msg.author == client.user:  # Ensure message was created by the bot
+
+            # Powerful users can delete anything
+            if is_powerful(payload.member, client.get_guild(payload.guild_id)):
+                await msg.delete()
+
+            # msg.reference.fail_if_not_exists dosen't appear to work correctly.
+            # // if msg.reference and not msg.reference.fail_if_not_exists:  # If is a reply & refernced message still exists
+            # if msg.reference:  # If is a reply
+            #     ref_msg = (
+            #         msg.reference.resolved
+            #         if isinstance(msg.reference.resolved, Message)
+            #         else await msg.channel.fetch_message(msg.reference.message_id)
+            #     )
+            #     if ref_msg.author == payload.member:
+            #         print(2)
+            #         await msg.delete()
 
 
 ### Inline linking ###
@@ -1154,6 +1180,8 @@ MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 
 @client.event  # type: ignore
 async def on_message(msg: Message) -> None:
+    global cached_files
+
     if msg.author == client.user:
         return
 
@@ -1197,19 +1225,19 @@ async def on_message(msg: Message) -> None:
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
-            await msg.remove_reaction(reaction_string)
-            return
-        else:  # User responded
             await msg.clear_reaction(reaction_string)
+            return
+        await msg.clear_reaction(reaction_string)
+
     render_queue: list[list[tuple[float, float]]] = []
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
 
     async with msg.channel.typing():
         # Create the messages
-        status_msg = await ctx.send("This is status message, that will show progress of your request.")
+        status_msg = await msg.channel.send("This is status message, that will show progress of your request.")
         embeds: list[Embed] = []
-        files: list[File, str] = []
+        files: list[File] = []
         errorlog = []
 
         for elm_type, elm_ids, separator in elms:
@@ -1217,7 +1245,7 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    render_queue += elms_to_render(elm_type, elm_id)
+                    render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
@@ -1237,8 +1265,7 @@ async def on_message(msg: Message) -> None:
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
-            file = File(filename)
-            files.append((file, filename))
+            files.append(File(filename))
             cached_files.add(filename)
 
         for username in users:
@@ -1252,9 +1279,8 @@ async def on_message(msg: Message) -> None:
             await status_msg.edit(content=f"Processing {map_frag}.")
             zoom, lat, lon = frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
-            file = File(filename)
             errorlog += errors
-            files.append((file, filename))
+            files.append(File(filename))
             cached_files.add(filename)
 
         # Send the messages
@@ -1262,13 +1288,13 @@ async def on_message(msg: Message) -> None:
             await msg.channel.send(embed=embeds[0], reference=msg)
             for embed in embeds[1:]:
                 await msg.channel.send(embed=embed)
-            for file, filename in files:
+            for file in files:
                 await msg.channel.send(file=file)
 
         # Sending files is also handled in embeds messaging.
         elif len(files) > 0:
             await msg.channel.send(file=files[0], reference=msg)
-            for file, filename in files[1:]:
+            for file in files[1:]:
                 await msg.channel.send(file=file)
         await status_msg.delete()
 
@@ -1367,7 +1393,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
 
-    if not ctx.guild.get_role(config["server_settings"][str(ctx.guild.id)]["power_role"]) in ctx.author.roles:
+    if not is_powerful(ctx.author, ctx.guild):
         await ctx.send("You do not have permission to run this command.", hidden=True)
         return
 
