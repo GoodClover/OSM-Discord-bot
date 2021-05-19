@@ -1189,22 +1189,28 @@ async def on_message(msg: Message) -> None:
     # Ask user confirmation by reacting with :mag_right: emoji.
     if ask_confirmation:
         reaction_string = "🔎"  # :mag_right:
+        image_emoji = "🖼️"  # :frame_photo: 
         await msg.add_reaction(reaction_string)
+        await msg.add_reaction(image_emoji)
 
         def check(reaction, user_obj):
-            return user_obj == msg.author and str(reaction.emoji) == reaction_string
-
+            return user_obj == msg.author and ( str(reaction.emoji) == reaction_string or str(reaction.emoji) == image_emoji) 
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
-            await msg.remove_reaction(reaction_string)
+            await msg.clear_reaction(reaction_string)
+            await msg.clear_reaction(image_emoji)
             return
         else:  # User responded
             await msg.clear_reaction(reaction_string)
+            await msg.clear_reaction(image_emoji)
     render_queue: list[list[tuple[float, float]]] = []
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-
+    if image_emoji == reaction:
+        add_image = True
+    else:
+        add_image = False
     async with msg.channel.typing():
         # Create the messages
         status_msg = await ctx.send("This is status message, that will show progress of your request.")
@@ -1217,7 +1223,8 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    render_queue += elms_to_render(elm_type, elm_id, status_msg=status_msg)
+                    if add_image:
+                        render_queue += elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
