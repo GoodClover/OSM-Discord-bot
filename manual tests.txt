@@ -1,0 +1,14 @@
+Test 1:
+Command: node 1 and 2
+User action: None
+Expected behaviour: Bot removes reaction after 15 seconds and doesn't fulfill command
+
+Test 2:
+Command: node 1 and 2
+User action: React with :mag_right: within 15 sec
+Expected behaviour: Bot removes both user and it's own reactions and proceeds to fill command.
+
+Test 3:
+Command: node/1
+User action: React with :wastebasket. to bot's reply
+Expected behaviour: Bot removes it's message.

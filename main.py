@@ -32,7 +32,10 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
+cached_files: set = set()  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
 
+tile_w, tile_h = 256, 256  # Tile size used for renderer
+tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
 
 def load_config() -> None:
     global config, guild_ids
@@ -764,7 +767,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = False) -> list[list[tuple[float, float]]]:
+def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, recursion_depth=0):
     # Inputs:   elem_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -777,10 +780,51 @@ def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = Fals
     # Throws IndexError if element was not found
     # Needs handling for Overpass's over quota error.
     # Future improvement possibility: include tags into output to control rendering, especially colours.
-
-    result = overpass_api.query("[out:json][timeout:15];" + elem_type + "(id:" + str(elem_id) + ");out skel geom;")
+    # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
+    get_center = False
+    if elem_type!="relation":
+        get_bbox = False
+    elif 1 < recursion_depth:
+        get_center = True
+    if get_bbox:
+        output_type="bb"
+    elif get_center:
+        output_type="center"
+    else:
+        output_type="skel geom"  # Original version
+    Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
+    status_msg.edit("Querying `" + Q + "`")  # I hope this works. uncomment on live instance
+    # Above line may introduce error when running it from /element, not on_message.
+    try:
+        result = overpass_api.query(Q)
+    except exception.OverpassRuntimeError:
+        print('Overpass timeout')
+        if not get_bbox:
+            # recursion_depth is not increased, because this is retry of same element
+            return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth)
+        else:
+            Q = Q.replace('bb;', 'skel center;')
+            get_center = True
+            status_msg.edit("Querying `" + Q + "`") 
+            result = overpass_api.query(Q)
+    # return result
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
+    # Combining all queries together is much faster
+    # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
+    if get_center:
+        if 'center' in result.relations[0].attributes:
+            center = result.relations[0].attributes['center']
+            return [[(float(center['lat']), float(center['lon']))]]
+    elif get_bbox:
+        if 'bounds' in result.relations[0].attributes:
+            bound=result.relations[0].attributes['bounds']
+            # {'minlat': Decimal('59.4'), 'minlon': Decimal('24.6'), 'maxlat': Decimal('59.5'), 'maxlon': Decimal('24.7')
+            return [[(float(bound['minlat']), float(bound['minlon'])),
+		 (float(bound['minlat']), float(bound['maxlon'])),
+		 (float(bound['maxlat']), float(bound['maxlon'])),
+		 (float(bound['maxlat']), float(bound['minlon'])),
+		 (float(bound['minlat']), float(bound['minlon']))]]
     if elem_type == "relation":
         segments = []
         elems = result.relations[0].members
@@ -789,11 +833,10 @@ def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = Fals
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True)
+                seg = elms_to_render("relation", elems[i].ref, True, get_bbox, recursion_depth + 1)
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
                 segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
-
             elif type(elems[i]) == overpy.RelationWay:
                 geom = elems[i].geometry
                 segments.append(list(map(lambda x: (float(x.lat), float(x.lon)), geom)))
@@ -879,20 +922,21 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
 def get_render_queue_bounds(segments: list[list[tuple[float, float]]]) -> tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
-    min_lat, max_lat, min_lon, max_lon = 90, -90, 180, -180
+    min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
     precision = 5  # https://xkcd.com/2170/
     for segment in segments:
         for coordinates in segment:
             lat, lon = coordinates
             # int() because type checker is an idiot
+            # Switching it to int kills the whole renderer!
             if lat > max_lat:
-                max_lat = int(round(lat, precision))
+                max_lat = float(round(lat, precision))
             if lat < min_lat:
-                min_lat = int(round(lat, precision))
+                min_lat = float(round(lat, precision))
             if lon > max_lon:
-                max_lon = int(round(lon, precision))
+                max_lon = float(round(lon, precision))
             if lon < min_lon:
-                min_lon = int(round(lon, precision))
+                min_lon = float(round(lon, precision))
     if min_lat == max_lat:  # In event when all coordinates are same...
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
@@ -909,15 +953,15 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Finds map area, that should contain all elements.
 
     min_lat, max_lat, min_lon, max_lon = queue_bounds
-    tiles_x, tiles_y = 5, 5
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
+    max_zoom = 19
     zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
     center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
     zoom_y = 22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
         zoom_y -= 1  # Bit slow and dumb approach
-    zoom = min(zoom_x, zoom_y, 19)
+    zoom = min(zoom_x, zoom_y, max_zoom)
     return (zoom, *center)
 
 
@@ -946,7 +990,7 @@ async def get_image_cluster_old(
     j = 0
     xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
     xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * 256 - 1, (ymax - ymin + 1) * 256 - 1))
+    Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
     for xtile in range(xmin, xmax + 1):
         for ytile in range(ymin, ymax + 1):
             try:
@@ -965,7 +1009,6 @@ async def get_image_cluster_old(
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int]:
     # Following line is duplicataed at calc_preview_area()
-    tiles_x, tiles_y = 5, 5
     center_x, center_y = deg2tile(lat_deg, lon_deg, zoom)
     xmin, xmax = center_x - int(tiles_x / 2), center_x + int(tiles_x / 2)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
@@ -988,7 +1031,6 @@ async def get_image_cluster(
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    tile_w, tile_h = 256, 256
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
     tile_offset = deg2tile_float(lat_deg, lon_deg, zoom)
@@ -1042,7 +1084,6 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
     zoom, lat_deg, lon_deg = frag
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    tile_w, tile_h = 256, 256
     xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
@@ -1057,6 +1098,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             coord = render_queue[seg_num][i]
             # Following returns X/Y similar to tile number, but as floats.
             coord = deg2tile_float(coord[0], coord[1], zoom)
+            # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
             coord = round((coord[0] - xmin - tile_offset[0]) * tile_w), round(
                 (coord[1] - ymin - tile_offset[1]) * tile_h
             )
@@ -1155,7 +1197,7 @@ async def on_message(msg: Message) -> None:
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
-            await msg.clear_reaction(reaction_string)
+            await msg.remove_reaction(reaction_string)
             return
         else:  # User responded
             await msg.clear_reaction(reaction_string)
@@ -1165,12 +1207,14 @@ async def on_message(msg: Message) -> None:
 
     async with msg.channel.typing():
         # Create the messages
+        status_msg = await ctx.send("This is status message, that will show progress of your request.")
         embeds: list[Embed] = []
         files: list[File, str] = []
         errorlog = []
 
         for elm_type, elm_ids, separator in elms:
             for elm_id in elm_ids:
+                await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
                     render_queue += elms_to_render(elm_type, elm_id)
@@ -1180,6 +1224,7 @@ async def on_message(msg: Message) -> None:
         for elm_type, changeset_ids, separator in changesets:
             # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
             for changeset_id in changeset_ids:
+                await status_msg.edit(content=f"Processing {elm_type}/{changeset_id}.")
                 try:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
@@ -1194,19 +1239,23 @@ async def on_message(msg: Message) -> None:
             cluster = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
             file = File(filename)
             files.append((file, filename))
+            cached_files.add(filename)
 
         for username in users:
+            await status_msg.edit(content=f"Processing user/{username}.")
             try:
                 embeds.append(user_embed(get_user(get_id_from_username(username))))
             except ValueError:
                 errorlog.append(("user", username))
 
         for map_frag in map_frags:
+            await status_msg.edit(content=f"Processing {map_frag}.")
             zoom, lat, lon = frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             file = File(filename)
             errorlog += errors
             files.append((file, filename))
+            cached_files.add(filename)
 
         # Send the messages
         if len(embeds) > 0:
@@ -1221,14 +1270,16 @@ async def on_message(msg: Message) -> None:
             await msg.channel.send(file=files[0], reference=msg)
             for file, filename in files[1:]:
                 await msg.channel.send(file=file)
+        await status_msg.delete()
 
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
                 pass  # await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
 
     # Clean up files
-    for file, filename in files:
+    for filename in cached_files:
         os.remove(filename)
+    cached_files = set()
 
 
 ### Member count ###
