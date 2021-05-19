@@ -1197,7 +1197,7 @@ async def on_message(msg: Message) -> None:
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
-            await msg.clear_reaction(reaction_string)
+            await msg.remove_reaction(reaction_string)
             return
         else:  # User responded
             await msg.clear_reaction(reaction_string)
