@@ -780,11 +780,16 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     # Future improvement possibility: include tags into output to control rendering, especially colours.
     # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
     get_center = False
-    if elem_type!="relation": get_bbox = False
-    # Don't you dare to query anything, that has Belgium in it.
-    elif 1 < recursion_depth: get_center = True  
-    if get_bbox: output_type="bb"
-    else: output_type="skel geom"  # Original version
+    if elem_type!="relation":
+        get_bbox = False
+    elif 1 < recursion_depth:
+        get_center = True
+    if get_bbox:
+        output_type="bb"
+    elif get_center:
+        output_type="center"
+    else:
+        output_type="skel geom"  # Original version
     Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
     status_msg.edit("Querying `" + Q + "`")  # I hope this works. uncomment on live instance
     # Above line may introduce error when running it from /element, not on_message.
