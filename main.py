@@ -1290,7 +1290,7 @@ async def on_message(msg: Message) -> None:
     # User quota is checked after they confirmed element lookup.
     for i in range(int(queried_elements_count ** element_count_exp) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
-        rating = check_rate_limit(author_id, i ** rate_extra_exp)
+        rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
         if not rating:
             return
 
