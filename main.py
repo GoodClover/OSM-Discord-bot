@@ -793,7 +793,7 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     else:
         output_type="skel geom"  # Original version
     Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
-    status_msg.edit("Querying `" + Q + "`")  # I hope this works. uncomment on live instance
+    status_msg.edit(content="Querying `" + Q + "`")  # I hope this works. uncomment on live instance
     # Above line may introduce error when running it from /element, not on_message.
     try:
         result = overpass_api.query(Q)
