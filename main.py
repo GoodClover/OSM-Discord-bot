@@ -197,7 +197,7 @@ async def josmtip_command(ctx: SlashContext) -> None:
     ],
 )  # type: ignore
 async def taginfo_command(ctx: SlashContext, tag: str) -> None:
-    if not check_rate_limit('asd'):
+    if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     split_tag = tag.replace("`", "").split("=", 1)
@@ -322,7 +322,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     ],
 )  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
-    if not check_rate_limit('asd'):
+    if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     extras_list = [e.strip() for e in extras.lower().split(",")]
