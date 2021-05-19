@@ -32,9 +32,8 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
-cached_files: set = (
-    set()
-)  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+cached_files: set = set()
 
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
