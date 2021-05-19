@@ -1227,6 +1227,11 @@ async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
+    max_elements = 10
+    element_count_exp = 1.17
+    rate_extra_exp = 1.8
+    # Note: 1.17 is calculated via log of 15 (defined in check_rate_limit) on base of 10 (max_elment)
+
     #### Try my commands, those are gone ####
     if msg.content.startswith("?josmtip"):
         await msg.channel.send("Try `/josmtip` :thinking:")
@@ -1250,8 +1255,14 @@ async def on_message(msg: Message) -> None:
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
     map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
-    if (len(elms) + len(changesets) + len(users) + len(map_frags)) == 0:
+    queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags)
+    author_id = msg.author.id
+    if queried_elements_count == 0:
         return
+    elif queried_elements_count > 10:
+        # If there are too many elements, just ignore.
+        return
+
     ask_confirmation = False
     for match in elms + changesets:
         if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
@@ -1275,6 +1286,13 @@ async def on_message(msg: Message) -> None:
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
     render_queue: list[list[tuple[float, float]]] = []
+
+    # User quota is checked after they confirmed element lookup.
+    for i in range(int(queried_elements_count ** element_count_exp) + 1):
+        # Allows querying up to 10 elements at same time, delayed for up to 130 sec
+        rating = check_rate_limit(author_id, i ** rate_extra_exp)
+        if not rating:
+            return
 
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     if image_emoji == reaction:
@@ -1475,7 +1493,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
     )
 
     await ctx.send(
-        f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}",
+        f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the result.\n{msg_to_link(msg)}",
         hidden=True,
     )
 
