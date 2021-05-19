@@ -930,13 +930,13 @@ def get_render_queue_bounds(segments: list[list[tuple[float, float]]]) -> tuple[
             # int() because type checker is an idiot
             # Switching it to int kills the whole renderer!
             if lat > max_lat:
-                max_lat = float(round(lat, precision))
+                max_lat = round(lat, precision)
             if lat < min_lat:
-                min_lat = float(round(lat, precision))
+                min_lat = round(lat, precision)
             if lon > max_lon:
-                max_lon = float(round(lon, precision))
+                max_lon = round(lon, precision)
             if lon < min_lon:
-                min_lon = float(round(lon, precision))
+                min_lon = round(lon, precision)
     if min_lat == max_lat:  # In event when all coordinates are same...
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
@@ -1061,12 +1061,12 @@ async def get_image_cluster(
 def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
     # https://stackoverflow.com/questions/59060887
     # This is polyline of all coordinates on array.
-    draw.line(segment, fill=colour, width=2)
+    draw.line(segment, fill=colour, width=4)
 
 
 def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     # https://stackoverflow.com/questions/2980366
-    r = 3
+    r = 10
     x, y = coord
     leftUpPoint = (x - r, y - r)
     rightDownPoint = (x + r, y + r)
