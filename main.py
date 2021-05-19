@@ -764,7 +764,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = False) -> list[list[tuple[float, float]]]:
+def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False):
     # Inputs:   elem_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -777,10 +777,34 @@ def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = Fals
     # Throws IndexError if element was not found
     # Needs handling for Overpass's over quota error.
     # Future improvement possibility: include tags into output to control rendering, especially colours.
-
-    result = overpass_api.query("[out:json][timeout:15];" + elem_type + "(id:" + str(elem_id) + ");out skel geom;")
+    if elem_type!="relation": get_bbox=False
+    elif elem_id==52411: get_bbox=True  # Don't you dare to query anything, that has Belgium in it. 
+    if get_bbox: output_type="bb"
+    else: output_type="skel geom"  # Original version
+    Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
+    print(Q)
+    try:
+        result = overpass_api.query(Q)
+    except exception.OverpassRuntimeError:
+        if not get_bbox:
+            return elms_to_render(elem_type, elem_id, no_reduction, True)
+        else:
+            result = overpass_api.query(Q.replace('bb;', 'skel center;'))
+    # return result
     # Since we are querying for single element, top level result will have just 1 element.
     node_count = 0
+    # Combining all queries together is much faster
+    # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
+    # Also, script should pass status message to recursion to so script could provide better status update.
+    if get_bbox:
+        if 'bounds' in result.relations[0].attributes:
+            bound=result.relations[0].attributes['bounds']
+            # {'minlat': Decimal('59.4'), 'minlon': Decimal('24.6'), 'maxlat': Decimal('59.5'), 'maxlon': Decimal('24.7')
+            return [[(float(bound['minlat']), float(bound['minlon'])),
+		 (float(bound['minlat']), float(bound['maxlon'])),
+		 (float(bound['maxlat']), float(bound['maxlon'])),
+		 (float(bound['maxlat']), float(bound['minlon'])),
+		 (float(bound['minlat']), float(bound['minlon']))]]
     if elem_type == "relation":
         segments = []
         elems = result.relations[0].members
@@ -789,10 +813,10 @@ def elms_to_render(elem_type: str, elem_id: str | int, no_reduction: bool = Fals
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True)
+                seg = elms_to_render("relation", elems[i].ref, True, True)
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
-                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
+;out skel geom;                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
 
             elif type(elems[i]) == overpy.RelationWay:
                 geom = elems[i].geometry
