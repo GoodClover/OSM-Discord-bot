@@ -32,7 +32,11 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
+
 cached_files: set = set()  # This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+# Set of unix timestamps.
+recent_googles: set = set()
+command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
@@ -90,6 +94,21 @@ def sanitise(text: str) -> str:
     return text
 
 
+def check_rate_limit(user, extra=0):
+    # Sorry for no typehints, i don't know what types to have
+    tnow=round(time.time(), 1)
+    time_period = 30
+    max_calls = 15
+    if user not in command_history:
+        command_history[user] = set()
+    # Extra is useful in case when user queries lot of elements in one query.
+    command_history[user].add(tnow + extra)
+    command_history[user]=set(filter(lambda x:x>tnow-time_period, command_history[user]))
+    if command_history[user]> max_calls:
+        return False
+    return True
+
+
 def get_suffixed_tag(
     tags: dict[str, str],
     key: str,
@@ -134,8 +153,6 @@ async def on_ready() -> None:
 
 
 # I got annoyed by people using googlebad so often, so i implemented an easter egg.
-# Set of unix timestamps.
-recent_googles: set = set()
 # Google Bad
 @slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
 async def googlebad_command(ctx: SlashContext) -> None:
@@ -152,7 +169,10 @@ async def googlebad_command(ctx: SlashContext) -> None:
 
 # JOSM Tip
 @slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)  # type: ignore
-async def josmtip_command(ctx: SlashContext) -> None:
+async def josmtip_command(ctx: SlashContext) -> None:    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     await ctx.send(random.choice(josm_tips))
 
 
@@ -171,6 +191,10 @@ async def josmtip_command(ctx: SlashContext) -> None:
     ],
 )  # type: ignore
 async def taginfo_command(ctx: SlashContext, tag: str) -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     split_tag = tag.replace("`", "").split("=", 1)
 
     if len(split_tag) == 2:
@@ -293,6 +317,10 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     ],
 )  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
@@ -479,6 +507,10 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = "") -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
@@ -596,6 +628,10 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def user_command(ctx: SlashContext, username: str, extras: str = "") -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
@@ -696,6 +732,10 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def showmap_command(ctx: SlashContext, url: str) -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     try:
         zoom_int, lat_deg, lon_deg = frag_to_bits(url)
     except ValueError:
@@ -1323,6 +1363,10 @@ async def update_member_count(guild: Guild) -> None:
     ],
 )  # type: ignore
 async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
@@ -1372,6 +1416,10 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     ],
 )  # type: ignore
 async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
+    # FIXME: Replace asd with actual user ID.
+    if not check_rate_limit('asd'):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
         await ctx.send("Suggestions are not enabled on this server.", hidden=True)
         return
