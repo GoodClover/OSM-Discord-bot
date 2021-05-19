@@ -1100,6 +1100,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             coord = render_queue[seg_num][i]
             # Following returns X/Y similar to tile number, but as floats.
             coord = deg2tile_float(coord[0], coord[1], zoom)
+            # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
             coord = round((coord[0] - xmin - tile_offset[0]) * tile_w), round(
                 (coord[1] - ymin - tile_offset[1]) * tile_h
             )
