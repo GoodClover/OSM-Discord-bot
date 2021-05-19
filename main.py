@@ -38,9 +38,29 @@ cached_files: set = set()
 recent_googles: set = set()
 command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
+### Inline linking ###
+ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
+# FIXME: For some reason this allows stuff after the end of the map fragment.
+MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 
+
+max_zoom = 19
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
+
+# These 2 are used in check_rate_limit
+time_period = 30
+max_calls = 15
+
+# Following 3 are used by on_message
+max_elements = 10
+element_count_exp = round(math.log(max_calls, max_elements), 2)  # 1.17
+rate_extra_exp = 1.8
+
+# Used in render_elms_on_cluster. List of colours to be cycled.
+element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 
 def load_config() -> None:
@@ -103,8 +123,6 @@ def sanitise(text: str) -> str:
 def check_rate_limit(user, extra=0):
     # Sorry for no typehints, i don't know what types to have
     tnow=round(time.time(), 1)
-    time_period = 30
-    max_calls = 15
     if user not in command_history:
         command_history[user] = set()
     # Extra is useful in case when user queries lot of elements in one query.
@@ -407,6 +425,8 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
     # ? Maybe make it read `colour=` tags for some extra pop?
     # if "colour" in elm["tags"]:
+          # str_to_colour is not needed because PIL supports
+          # both hex and string coulors just like OSM.
     #     embed.colour = str_to_colour(elm["tags"]["colour"])
 
     #### Image ####
@@ -1013,10 +1033,9 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
-    max_zoom = 19
     zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
     center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
-    zoom_y = 22  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+    zoom_y = max_zoom + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, max_zoom)
@@ -1040,8 +1059,8 @@ async def get_image_cluster_old(
     tile_url: str = config["tile_url"],
 ) -> File:
     # Modified from https://github.com/ForgottenHero/mr-maps
-    delta_long = 0.00421 * math.pow(2, 19 - int(zoom))
-    delta_lat = 0.0012 * math.pow(2, 19 - int(zoom))
+    delta_long = 0.00421 * math.pow(2, max_zoom - int(zoom))
+    delta_lat = 0.0012 * math.pow(2, max_zoom - int(zoom))
     lat_deg = float(lat_deg) - (delta_lat / 2)
     lon_deg = float(lon_deg) - (delta_long / 2)
     i = 0
@@ -1149,8 +1168,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # tile_offset - By how many tiles should tile grid shifted up left.
     tile_offset = (tile_offset[0] % 1, tile_offset[1] % 1)
     # Basic demo for colour picker.
-    colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
-    len_colors = len(colors)
+    len_colors = len(element_colors)
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
             coord = render_queue[seg_num][i]
@@ -1163,7 +1181,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
-        color = colors[seg_num % len_colors]
+        color = element_colors[seg_num % len_colors]
         draw_line(render_queue[seg_num], draw, color)
         # Maybe nodes shouldn't be rendered, if way has many, let's say 80+ nodes,
         # because it would become too cluttered?
@@ -1206,14 +1224,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             #         await msg.delete()
 
 
-### Inline linking ###
-ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
-# FIXME: For some reason this allows stuff after the end of the map fragment.
-MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
-
-
 @client.event  # type: ignore
 async def on_message(msg: Message) -> None:
     global cached_files
@@ -1221,10 +1231,6 @@ async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
-    max_elements = 10
-    element_count_exp = 1.17
-    rate_extra_exp = 1.8
-    # Note: 1.17 is calculated via log of 15 (defined in check_rate_limit) on base of 10 (max_elment)
 
     #### Try my commands, those are gone ####
     if msg.content.startswith("?josmtip"):
