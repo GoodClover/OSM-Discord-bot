@@ -779,10 +779,10 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     # Needs handling for Overpass's over quota error.
     # Future improvement possibility: include tags into output to control rendering, especially colours.
     # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
-    if elem_type!="relation": get_bbox=False
     get_center = False
+    if elem_type!="relation": get_bbox = False
     # Don't you dare to query anything, that has Belgium in it.
-    elif 2 < recursion_depth: get_bbox=True  
+    elif 1 < recursion_depth: get_center = True  
     if get_bbox: output_type="bb"
     else: output_type="skel geom"  # Original version
     Q="[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out "+output_type+";"
@@ -791,6 +791,7 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
     try:
         result = overpass_api.query(Q)
     except exception.OverpassRuntimeError:
+        print('Overpass timeout')
         if not get_bbox:
             # recursion_depth is not increased, because this is retry of same element
             return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth)
@@ -826,11 +827,10 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True, True, recursion_depth + 1)
+                seg = elms_to_render("relation", elems[i].ref, True, get_bbox, recursion_depth + 1)
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
-;out skel geom;                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
-
+                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
             elif type(elems[i]) == overpy.RelationWay:
                 geom = elems[i].geometry
                 segments.append(list(map(lambda x: (float(x.lat), float(x.lon)), geom)))
