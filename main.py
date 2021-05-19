@@ -767,7 +767,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, recursion_depth=0):
+def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, recursion_depth=0, status_msg=None):
     # Inputs:   elem_type (node / way / relation)
     #           elem_id     element's OSM ID as string
     # Queries OSM element geometry via overpass API.
@@ -801,7 +801,7 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
         print('Overpass timeout')
         if not get_bbox:
             # recursion_depth is not increased, because this is retry of same element
-            return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth)
+            return elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth, status_msg)
         else:
             Q = Q.replace('bb;', 'skel center;')
             get_center = True
@@ -833,7 +833,7 @@ def elms_to_render(elem_type, elem_id, no_reduction = False, get_bbox=False, rec
             # Previously it skipped elements based on role, but it was buggy.
             # New, recursive approach.
             if type(elems[i]) == overpy.RelationRelation:
-                seg = elms_to_render("relation", elems[i].ref, True, get_bbox, recursion_depth + 1)
+                seg = elms_to_render("relation", elems[i].ref, True, get_bbox, recursion_depth + 1, status_msg)
                 segments += seg
             elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
                 segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
@@ -1217,7 +1217,7 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
                     embeds.append(elm_embed(get_elm(elm_type, elm_id)))
-                    render_queue += elms_to_render(elm_type, elm_id)
+                    render_queue += elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError:
                     errorlog.append((elm_type, elm_id))
 
