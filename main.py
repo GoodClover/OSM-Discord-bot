@@ -176,7 +176,6 @@ async def googlebad_command(ctx: SlashContext) -> None:
 # JOSM Tip
 @slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)  # type: ignore
 async def josmtip_command(ctx: SlashContext) -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -198,7 +197,6 @@ async def josmtip_command(ctx: SlashContext) -> None:
     ],
 )  # type: ignore
 async def taginfo_command(ctx: SlashContext, tag: str) -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit('asd'):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -324,7 +322,6 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     ],
 )  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit('asd'):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -514,7 +511,6 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = "") -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -635,7 +631,6 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def user_command(ctx: SlashContext, username: str, extras: str = "") -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -739,7 +734,6 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def showmap_command(ctx: SlashContext, url: str) -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -1408,7 +1402,6 @@ async def update_member_count(guild: Guild) -> None:
     ],
 )  # type: ignore
 async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
@@ -1461,7 +1454,6 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     ],
 )  # type: ignore
 async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
-    # FIXME: Replace asd with actual user ID.
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
