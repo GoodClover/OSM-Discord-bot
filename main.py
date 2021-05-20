@@ -1370,10 +1370,14 @@ async def on_message(msg: Message) -> None:
         (elm[0], tuple(re.findall("\d+", elm[2])), elm[1])
         for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)
     ]
+    notes = [
+        (elm[0], tuple(re.findall("\d+", elm[2])), elm[1])
+        for elm in re.findall(NOTE_INLINE_REGEX, msg.clean_content)
+    ]
     users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
     map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
 
-    queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags)
+    queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id
     if queried_elements_count == 0:
         return
@@ -1382,7 +1386,7 @@ async def on_message(msg: Message) -> None:
         return
 
     ask_confirmation = False
-    for match in elms + changesets:
+    for match in elms + changesets + notes:
         if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
             ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
@@ -1442,6 +1446,15 @@ async def on_message(msg: Message) -> None:
                     embeds.append(changeset_embed(get_changeset(changeset_id)))
                 except ValueError:
                     errorlog.append((elm_type, changeset_id))
+
+        for elm_type, note_ids, separator in notes:
+            # note_ids = (<tuple: list of notes>, <str: separator used>)
+            for note_id in note_ids:
+                await status_msg.edit(content=f"Processing {elm_type}/{note_id}.")
+                try:
+                    embeds.append(note_embed(get_note(note_id)))
+                except ValueError:
+                    errorlog.append((elm_type, note_id))
 
         if render_queue:
             # Next step is to calculate map area for render.
