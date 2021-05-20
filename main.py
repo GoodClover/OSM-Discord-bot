@@ -1124,8 +1124,8 @@ async def get_image_cluster(
                 Cluster.paste(
                     tile,
                     box=(
-                        (xtile - xmin - int(tile_offset[0])) * tile_w,
-                        (ytile - ymin - int(tile_offset[1])) * tile_h,
+                        int((xtile - xmin - tile_offset[0]) * tile_w),
+                        int((ytile - ymin - tile_offset[1]) * tile_h),
                     ),
                 )
             except Exception as e:
