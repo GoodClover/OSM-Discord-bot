@@ -41,6 +41,7 @@ command_history:dict = dict()  # Global per-user dictionary of sets to keep trac
 ### Inline linking ###
 ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
+NOTE_INLINE_REGEX = rf"{SS}(note)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
@@ -627,6 +628,122 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         else:
             embed.add_field(name="Tags", value="*(no tags)*", inline=False)
 
+    return embed
+
+
+### Notes ###
+# Notes support was added based on changeset
+@slash.slash(
+    name="note",
+    description="Show details about a note.",
+    guild_ids=guild_ids,
+    options=[
+        create_option(
+            name="note_id",
+            description="ID of the note",
+            option_type=4,
+            required=True,
+        ),
+        create_option(
+            name="extras",
+            description="Comma seperated list of extras from `info`, `discussion`.",
+            option_type=3,
+            required=False,
+        ),
+    ],
+)  # type: ignore
+async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> None:
+    if not check_rate_limit(ctx.author_id):
+        await ctx.send("You have hit the limiter.", hidden=True)
+        return
+    extras_list = [e.strip() for e in extras.lower().split(",")]
+
+    for extra in extras_list:
+        if extra != "" and extra not in ["info", "discussion"]:
+            await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info`.", hidden=True)
+            return
+
+    try:
+        note = get_note(note_id)
+    except ValueError:
+        await ctx.send(f"Note `{note_id}` not found.", hidden=True)
+        return
+
+    await ctx.defer()
+    await ctx.send(embed=note_embed(note, extras_list))
+
+
+def get_note(note_id: str | int) -> dict:
+    """Shorthand for get_elm didn't work"""
+    res = requests.get(config["api_url"] + f"api/0.6/notes/{note_id}.json")
+    try:
+        elm = res.json()
+    except (json.decoder.JSONDecodeError, IndexError, KeyError):
+        raise ValueError(f"Note `{note_id}` not found")
+    return elm
+
+
+def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
+    embed = Embed()
+    embed.type = "rich"
+
+    embed.url = config["site_url"] + "note/" + str(note["id"])
+
+    embed.set_footer(
+        text=config["copyright_notice"],
+        icon_url=config["icon_url"],
+    )
+
+    # API returns very different result for notes
+
+    if note["properties"]["status"] == "closed":
+        closed = True
+        embed.set_thumbnail(url=config["symbols"]["note_solved"])
+    else:
+        closed = False
+        embed.set_thumbnail(url=config["symbols"]["note_open"])
+    embed.timestamp = str_to_date(note["properties"]["date_created"])
+    if "user" in note["properties"]["comments"][0]:
+        creator = note["properties"]["comments"][0]["user"]
+        embed.set_author(name=creator, url=note["properties"]["comments"][0]["user_url"])
+    else:
+        creator = "*Anonymous*"
+        embed.set_author(name=creator)
+
+    embed.title = f"Note: {note['properties']['id']}"
+
+    #### Description ####
+    embed.description = ""
+
+    if "comments" in note["properties"] and len(note["properties"]) > 0:
+        embed.description += "> " + note["properties"]["comments"][0]["text"].strip().replace("\n", "\n> ") + "\n\n"
+        note["properties"].pop("comment")
+    else:
+        embed.description += "*(no comment)*\n\n"
+
+    #### Image ####
+    # * This would create significant stress to the OSM servers, so I don't reccomend it.
+    # ! This doesn't work due to the OSM servers having some form of token check.
+    # embed.set_image(url=img_url)
+    # Easiest way to handle note rendering is to just draw on map.
+
+    #### Fields ####
+    if "info" in extras:
+        embed.add_field(name="Comments", value=str(len(note["properties"]["comments"])))
+        embed.add_field(name="Created", value=note["properties"]["date_created"])
+        if ["closed_at"] in note["properties"]["closed_at"]:
+            embed.add_field(name="Closed", value=note["properties"]["closed_at"])
+
+    if "discussion" in extras:
+        if note["properties"]["comments"]:
+            # Example: *- User opened on 2020-04-14 08:00*
+            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*", note["properties"]["comments"]))) + "\n\n"
+        else:
+            embed.description += "*No comments*\n\n"
+    if "user" in note["properties"]["comments"][0]:
+        embed.description += f"[Other notes by {creator}.](<https://www.openstreetmap.org/user/{creator}/notes>)"
+    else:
+        embed.description += f"~~Other notes by {creator}.~~"
     return embed
 
 
