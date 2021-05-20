@@ -2,11 +2,12 @@
 
 Most of this is documented via Discord's slash command hints when your using them.
 
-## View elements, changesets and users
+## View elements, changesets, notes and users
 
+### View elements
 `/elm <type> <ID> <extras>`
 
-View info about an OSM element.
+View info about an OSM element. (In OSM, element is node, way or relation).
 Gives basic info such as the name and links to a bunch of sites where you can see more about the element.
 
 `<extras>` is a comma seperated list of:
@@ -17,6 +18,7 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 
 Note: Due to Discord API limits, listing tags and members may not be possible if there are too many.
 
+### View changesets
 `/changeset <ID> <extras>`
 
 View info about an OSM changeset.
@@ -27,10 +29,22 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 - `info`: view extra info about the element.
 - `tags`: show the changesets's tags.
 
+### View notes
+`/note <ID>`
+
+View info about an OSM note. 
+Gives basic info such as the it's text.
+
+`<extras>` is a comma seperated list of:
+
+- `info`: view extra info about the note, such as date created and closed.
+- `discussion`: view all note discussion comments.
+
+### View users
 `/user <ID>`
 
-View info about an OSM changeset.
-Gives basic info such as the name and links to a bunch of sites where you can see more about it.
+View info about an OSM user.
+Gives basic info such as the name and links to a few sites where you can see more about it.
 
 `<extras>` is a comma seperated list of:
 
