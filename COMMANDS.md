@@ -50,11 +50,21 @@ Gives basic info such as the name and links to a few sites where you can see mor
 
 - `info`: view extra info about the user.
 
-## View tag**info**
+### Inline commands
 
-`/taginfo <tag>`
+Querying any of the previous items or map sections is also possible via inline commands. 
+Just mention any of them in normal message and bot will wake up. 
+There are multiple ways to trigger inline commands.
 
-View the tag**info** stats of a tag or key.
+- Paste ending of an OSM web link (`node/1`). 
+- Mention element casually in the text such as:
+  - node 1
+  - ways 1 and 2
+  - relations 1 and 2 or 3, 4 and 5
+  - changeset 1 or 2
+  - note 55 44
+- Paste map fragment (`#map=3/0.0/0.0`)
+
 
 ## Show a section of the map
 
@@ -64,6 +74,12 @@ Will fetch an image of the map from the given URL.
 
 The URL must end in a fragment in the form `#map=1/2/3` where `1` is the zoom level and `2/3` are the latitude and longitude.
 You may just use a fragment by itself.
+
+## View tag**info**
+
+`/taginfo <tag>`
+
+View the tag**info** stats of a tag or key.
 
 ## Random messsages
 
@@ -80,3 +96,4 @@ Allows people to post suggestions and vote with reactions in a set channel.
 `/close_suggestion <message-ID> <reason>` (Power people only)
 
 Allows suggestions to get accepted/rejected with a freeform reason.
+
