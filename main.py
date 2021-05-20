@@ -1029,17 +1029,18 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Output: tuple (int(zoom), float(lat), float(lon))
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
-
+    # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
     zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
-    center = delta_lat / 2 + min_lat, delta_lon / 2 + min_lon
+    center_lon = delta_lon / 2 + min_lon
     zoom_y = max_zoom + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, max_zoom)
-    return (zoom, *center)
+    center_lat = round(tile2deg(zoom, 0, (deg2tile_float(0, min_lat, zoom)[0] + deg2tile_float(0, max_lat, zoom)[0]) / 2)[0],5)
+    return (zoom, center_lat, center_lon)
 
 
 HEADERS = {
