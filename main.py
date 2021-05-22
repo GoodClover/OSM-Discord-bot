@@ -63,6 +63,21 @@ rate_extra_exp = 1.8
 
 # Used in render_elms_on_cluster. List of colours to be cycled.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
+max_note_zoom = 17
+
+reaction_string = "🔎"  # :mag_right:
+image_emoji = "🖼️"  # :frame_photo: 
+
+
+HEADERS = {
+    "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
+    "Accept": "image/png",
+    "Accept-Charset": "utf-8",
+    "Accept-Encoding": "none",
+    "Accept-Language": "en-GB,en",
+    "Connection": "keep-alive",
+}
+
 
 
 def load_config() -> None:
@@ -85,6 +100,16 @@ guild_ids: list[int] = []
 load_config()
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
+
+res = requests.get(config["symbols"]["note_solved"], headers=HEADERS)
+closed_note_icon = Image.open(BytesIO(res.content))
+res = requests.get(config["symbols"]["note_open"], headers=HEADERS)
+open_note_icon = Image.open(BytesIO(res.content))
+open_note_icon_size = open_note_icon.size
+closed_note_icon_size = closed_note_icon.size
+# Cluster.paste(tile,
+
+
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
@@ -698,7 +723,6 @@ def get_note(note_id: str | int) -> dict:
 def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
-    # print(note)
     embed.url = config["site_url"] + "note/" + str(note["properties"]["id"])
     embed.set_footer(
         text=config["copyright_notice"],
@@ -724,7 +748,6 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
 
     #### Description ####
     embed.description = ""
-    print(note)
     if "comments" in note["properties"] and len(note["properties"]) > 0:
         embed.description += "> " + note["properties"]["comments"][0]["text"].strip().replace("\n", "\n> ") + "\n\n"
         note["properties"]["comments"].pop(0)
@@ -750,10 +773,8 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
             embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*", note["properties"]["comments"]))) + "\n\n"
         else:
             embed.description += "*No comments*\n\n"
-    if "user" in note["properties"]["comments"][0]:
+    if creator != "*Anonymous*":
         embed.description += f"[Other notes by {creator}.](<https://www.openstreetmap.org/user/{creator}/notes>)"
-    else:
-        embed.description += f"~~Other notes by {creator}.~~"
     return embed
 
 
@@ -1124,7 +1145,7 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     return reduced
 
 
-def get_render_queue_bounds(segments: list[list[tuple[float, float]]]) -> tuple[float, float, float, float]:
+def get_render_queue_bounds(segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]]) -> tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
@@ -1142,6 +1163,18 @@ def get_render_queue_bounds(segments: list[list[tuple[float, float]]]) -> tuple[
                 max_lon = round(lon, precision)
             if lon < min_lon:
                 min_lon = round(lon, precision)
+    for note in notes:
+        lat, lon, solved = note
+        # int() because type checker is an idiot
+        # Switching it to int kills the whole renderer!
+        if lat > max_lat:
+            max_lat = round(lat, precision)
+        if lat < min_lat:
+            min_lat = round(lat, precision)
+        if lon > max_lon:
+            max_lon = round(lon, precision)
+        if lon < min_lon:
+            min_lon = round(lon, precision)
     if min_lat == max_lat:  # In event when all coordinates are same...
         min_lat -= 10 ** (-precision)
         max_lat += 10 ** (-precision)
@@ -1177,16 +1210,6 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
         center_lat=(max_lat-min_lat)/2+min_lat
     print(center_lat, min_lat, max_lat)
     return (zoom, center_lat, center_lon)
-
-
-HEADERS = {
-    "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
-    "Accept": "image/png",
-    "Accept-Charset": "utf-8",
-    "Accept-Encoding": "none",
-    "Accept-Language": "en-GB,en",
-    "Connection": "keep-alive",
-}
 
 
 async def get_image_cluster_old(
@@ -1287,6 +1310,32 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     twoPointList = [leftUpPoint, rightDownPoint]
     draw.ellipse(twoPointList, fill=colour)
 
+
+def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
+    zoom, lat_deg, lon_deg = frag
+    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    # tile_offset - By how many tiles should tile grid shifted somewhere.
+    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    errorlog = []
+    for note in notes:
+        # TODO: Unify coordinate conversion functions.
+        coord = deg2tile_float(note[0], note[1], zoom)
+        # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
+        coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
+                round((coord[1] - ymin + tile_offset[1]) * tile_h))
+        if note[2]:  # If note is closed
+            note_icon = closed_note_icon
+            icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2),
+                        int(coord[1] - closed_note_icon_size[1]))
+        else:
+            note_icon = open_note_icon
+            icon_pos = (int(coord[0] - open_note_icon_size[0] / 2),
+                        int(coord[1] - open_note_icon_size[1]))
+        # https://stackoverflow.com/questions/5324647
+        Cluster.paste(note_icon, icon_pos, note_icon)
+        del note_icon
+    Cluster.save(filename)
+    return Cluster, filename
 
 def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]], frag: tuple[int, float, float]):
     # Inputs:   Cluster - PIL image
@@ -1415,8 +1464,6 @@ async def on_message(msg: Message) -> None:
         if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
             ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
-    reaction_string = "🔎"  # :mag_right:
-    image_emoji = "🖼️"  # :frame_photo: 
     
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     add_image = False
@@ -1437,8 +1484,10 @@ async def on_message(msg: Message) -> None:
         else:  # User responded
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
-            if image_emoji == reaction:
+            if image_emoji == str(reaction.emoji):
                 add_image = True
+            else:
+                add_image = False
     render_queue: list[list[tuple[float, float]]] = []
 
     # User quota is checked after they confirmed element lookup.
@@ -1475,16 +1524,18 @@ async def on_message(msg: Message) -> None:
                 except ValueError:
                     errorlog.append((elm_type, changeset_id))
 
+        notes_render_queue = []
         for elm_type, note_ids, separator in notes:
             # note_ids = (<tuple: list of notes>, <str: separator used>)
             for note_id in note_ids:
                 await status_msg.edit(content=f"Processing {elm_type}/{note_id}.")
                 try:
-                    embeds.append(note_embed(get_note(note_id)))
+                    note = get_note(note_id)
+                    embeds.append(note_embed(note))
                     if add_image:
-                        pass
-                        # TODO: Add node rendering
-                        # render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
+                        notes_render_queue.append((note['geometry']['coordinates'][1],
+                                                   note['geometry']['coordinates'][0],
+                                                   note['properties']['status'] == 'closed'))
                 except ValueError:
                     errorlog.append((elm_type, note_id))
         time_spent = time.time() - msg_arrived
@@ -1496,8 +1547,10 @@ async def on_message(msg: Message) -> None:
             check_rate_limit(author_id, extra=len(render_queue) ** 0.8)
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"Preparing for rendering")
-            bbox = get_render_queue_bounds(render_queue)
+            bbox = get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
+            if notes_render_queue:
+            	zoom = min([zoom, max_note_zoom])
             print(zoom,lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
@@ -1505,6 +1558,9 @@ async def on_message(msg: Message) -> None:
             
             await status_msg.edit(content=f"Rendering elements to map.")
             cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+            if notes_render_queue:
+                for note in notes_render_queue:
+                    cluster, filename2 = render_notes_on_cluster(cluster, notes_render_queue, (zoom, lat, lon), filename2)
             files.append(File(filename2))
             cached_files.add(filename)
             cached_files.add(filename2)
