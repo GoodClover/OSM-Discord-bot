@@ -65,6 +65,12 @@ There are multiple ways to trigger inline commands.
   - note 55 44
 - Paste map fragment (`#map=3/0.0/0.0`)
 
+Using inline command will usually make bot to react to your message with 4 emojis and you need to click on any of first 3 to see any results
+
+- 🔎 (`:mag_right:`) - Full results to include both embeddeds and rendered map of elements
+- 🖼️ (`:frame_photo:`) - Shows single map screenshot with all elements and notes
+- 🛏️ (`:bed:`) - Shows every element's individual embedded.
+- ❌ (`:x:`) - Cancel request, all emojis will be removed and bot posts nothing. Default action triggered if no input is detected in 15 seconds.
 
 ## Show a section of the map
 
@@ -74,6 +80,7 @@ Will fetch an image of the map from the given URL.
 
 The URL must end in a fragment in the form `#map=1/2/3` where `1` is the zoom level and `2/3` are the latitude and longitude.
 You may just use a fragment by itself.
+Output size is fixed as 5x5 tiles image with dimensions of 1280x1280 px.
 
 ## View tag**info**
 
@@ -85,7 +92,7 @@ View the tag**info** stats of a tag or key.
 
 `/googlebad` and `/josmtip`
 
-View a random message from the [ohno-OSM](https://github.com/GoodClover/ohno-OSM) repo.
+View a random message from the [ohno-OSM](https://github.com/GoodClover/ohno-OSM) repo. `/googlebad` the only command that is excempt from 1 message per 3 sec rate limit.
 
 ## Suggestions
 
