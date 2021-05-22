@@ -1431,7 +1431,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\n"
+        + f"\n\n__**Voting closed**__ by {user_to_mention(ctx.author)}.\n"
         + f"Result: **{sanitise(result)}**\n"
         + f"Voting closed with: {votes['yes']} {config['emoji']['vote_yes']}"
         + f", {votes['abstain']} {config['emoji']['vote_abstain']}"
