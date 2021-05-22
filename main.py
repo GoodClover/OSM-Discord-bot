@@ -68,7 +68,7 @@ max_note_zoom = 17
 reaction_string = "🔎"  # :mag_right:
 image_emoji = "🖼️"  # :frame_photo: 
 cancel_emoji = "❌"  # :x:
-
+embedded_emoji = "🛏️" # :bed:
 
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
@@ -1327,7 +1327,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
     for note in notes:
         # TODO: Unify coordinate conversion functions.
         coord = wgs2pixel(note, tile_range, frag)
-        print(coord)
+        # print(coord)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
             icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2),
@@ -1337,7 +1337,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
             icon_pos = (int(coord[0] - open_note_icon_size[0] / 2),
                         int(coord[1] - open_note_icon_size[1]))
         # https://stackoverflow.com/questions/5324647
-        print(icon_pos)
+        # print(icon_pos)
         Cluster.paste(note_icon, icon_pos, note_icon)
         del note_icon
     Cluster.save(filename)
@@ -1380,7 +1380,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     filename = config["map_save_file"].format(t=time.time())
     if True: 
         draw_node((640.0,640.0), draw, "#088")
-        coord = wgs2pixel(lat_deg, lon_deg,tile_range, frag)
+        coord = wgs2pixel((frag[1], frag[2]),tile_range, frag)
         draw_node(coord, draw, "#bb0")
         print(640,640, ' ', *coord)
     print(f"Saved drawn image as {filename}.")
@@ -1461,39 +1461,48 @@ async def on_message(msg: Message) -> None:
         return
 
     ask_confirmation = False
-    for match in elms + changesets + notes:
-        if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
-            ask_confirmation = True
-    # Ask user confirmation by reacting with :mag_right: emoji.
-    
+    #for match in elms + changesets + notes:
+    #    if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
+    #        ask_confirmation = True
+    if len(elms + notes) != 0:
+    	ask_confirmation = True
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     add_image = False
     add_image = True
     
     if ask_confirmation:
+        # Ask user confirmation by reacting with 4 emojis
         await msg.add_reaction(reaction_string)
         await msg.add_reaction(image_emoji)
+        await msg.add_reaction(embedded_emoji)
         await msg.add_reaction(cancel_emoji)
 
         def check(reaction, user_obj):
-            return user_obj == msg.author and ( str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji})
+            return user_obj == msg.author and ( str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji, embedded_emoji})
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
+            await msg.clear_reaction(embedded_emoji)
             await msg.clear_reaction(cancel_emoji)
             return
         else:  # User responded
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
+            await msg.clear_reaction(embedded_emoji)
             await msg.clear_reaction(cancel_emoji)
             if image_emoji == str(reaction.emoji):
                 add_image = True
+                add_embedded = False
+            elif embedded_emoji == str(reaction.emoji):
+                add_image = False
+                add_embedded = True
             elif cancel_emoji == str(reaction.emoji):
                 return
             else:
-                add_image = False
+                add_embedded = True
+                add_image = True
     render_queue: list[list[tuple[float, float]]] = []
 
     # User quota is checked after they confirmed element lookup.
@@ -1502,7 +1511,6 @@ async def on_message(msg: Message) -> None:
         rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
         if not rating:
             return
-    #await msg.add_reaction(image_emoji)
     print(add_image)
     async with msg.channel.typing():
         # Create the messages
@@ -1515,7 +1523,8 @@ async def on_message(msg: Message) -> None:
             for elm_id in elm_ids:
                 await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
                 try:
-                    embeds.append(elm_embed(get_elm(elm_type, elm_id)))
+                    if add_embedded:
+                        embeds.append(elm_embed(get_elm(elm_type, elm_id)))
                     if add_image:
                         render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError:
@@ -1537,7 +1546,8 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"Processing {elm_type}/{note_id}.")
                 try:
                     note = get_note(note_id)
-                    embeds.append(note_embed(note))
+                    if add_embedded:
+                        embeds.append(note_embed(note))
                     if add_image:
                         notes_render_queue.append((note['geometry']['coordinates'][1],
                                                    note['geometry']['coordinates'][0],
