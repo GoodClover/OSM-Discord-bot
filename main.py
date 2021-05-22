@@ -563,7 +563,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
         ),
         create_option(
             name="extras",
-            description="Comma seperated list of extras from `info`, `tags`.",
+            description="Comma seperated list of extras from `info`, `tags`, `discussion`.",
             option_type=3,
             required=False,
         ),
@@ -576,7 +576,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
-        if extra != "" and extra not in ["info", "tags"]:
+        if extra != "" and extra not in ["info", "tags", "discussion"]:
             await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info` and `tags`.", hidden=True)
             return
 
@@ -601,8 +601,10 @@ def get_changeset(changeset_id: str | int) -> dict:
 def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
-
-    embed.url = config["site_url"] + "changeset/" + str(changeset["id"])
+    discussion_suffix = ""
+    if "discussion" in extras:
+        discussion_suffix = "?include_discussion=true"
+    embed.url = config["site_url"] + "changeset/" + str(changeset["id"] + discussion_suffix)
 
     embed.set_footer(
         text=config["copyright_notice"],
@@ -665,6 +667,13 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
             )
         else:
             embed.add_field(name="Tags", value="*(no tags)*", inline=False)
+# ?include_discussion=true
+    if "discussion" in extras:
+        if changeset["comments_count"] > 0:
+            # Example: *- User opened on 2020-04-14 08:00*
+            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} {x['action']} on {x['date'][:16].replace('T',' ')}*", changeset["discussion"]))) + "\n\n"
+        else:
+            embed.description += "*No comments*\n\n"
 
     return embed
 
