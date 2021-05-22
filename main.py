@@ -1401,7 +1401,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
     try:
-        msg = await suggestion_chanel.fetch_message(msg_id)
+        msg: Message = await suggestion_chanel.fetch_message(msg_id)
     except discord.errors.NotFound:
         await ctx.send("Message not found. Likely an incorrect ID or it is not in the suggestion channel.", hidden=True)
         return
@@ -1410,10 +1410,36 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
         await ctx.send("I can't modify that message, as it was not created by me :P", hidden=True)
         return
 
+    votes = {
+        "yes": 0,
+        "abstain": 0,
+        "no": 0,
+    }
+    for reaction in msg.reactions:
+        # Custon emojis are in a format like <:vote_no:845705089222049792>
+        # Real emoji just give the Unicode emoji, therefore we have to do this:
+        r = str(reaction)
+        if ":" in r:
+            r = r.split(":")[1].removeprefix("vote_")
+
+        # Doing an if for += or = because it's possible to have custom emoji with the same name on different servers.
+        if r in votes:
+            # reaction.me is True if the bot added the reaction, so subting it means we don't count the bot as voting.
+            votes[r] += reaction.count - reaction.me
+        else:
+            votes[r] = reaction.count - reaction.me
+
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\nResult: **{sanitise(result)}**"
+        + f"\n\nVoting closed by {user_to_mention(ctx.author)}.\n"
+        + f"Result: **{sanitise(result)}**\n"
+        + f"Voting closed with: {votes['yes']} {config['emoji']['vote_yes']}"
+        + f", {votes['abstain']} {config['emoji']['vote_abstain']}"
+        + f", {votes['no']} {config['emoji']['vote_no']}"
+        + (f", {votes['wat']} :wat:" if "wat" in votes else "")
+        + (f", {votes['🫖']} 🫖" if "🫖" in votes else "")
     )
+    # Extra brackets above are to stop weird auto-formatting.
 
     await ctx.send(
         f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the reuslt.\n{msg_to_link(msg)}",
