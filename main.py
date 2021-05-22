@@ -1145,7 +1145,7 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     return reduced
 
 
-def get_render_queue_bounds(segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]]) -> tuple[float, float, float, float]:
+def get_render_queue_bounds(segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []) -> tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
@@ -1310,6 +1310,9 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     twoPointList = [leftUpPoint, rightDownPoint]
     draw.ellipse(twoPointList, fill=colour)
 
+def tile2pixel(xy: tuple[float | int, float | int], frag: tuple[int, float, float]):
+    zoom, lat_deg, lon_deg = frag
+    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
 
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
     zoom, lat_deg, lon_deg = frag
@@ -1382,7 +1385,13 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
                 for node_num in range(1, len(render_queue[seg_num])):
                     draw_node(render_queue[seg_num][node_num], draw, color)
     filename = config["map_save_file"].format(t=time.time())
-    if True: draw_node((640.0,640.0), draw, "#088")
+    if True: 
+        draw_node((640.0,640.0), draw, "#088")
+        coord = deg2tile_float(lat_deg, lon_deg, zoom)
+        coord = (round((coord[0] - xmin - tile_offset[0]) * tile_w), 
+                 round((coord[1] - ymin - tile_offset[1]) * tile_h))
+        print(640,640, ' ', *coord)
+        draw_node(coord, draw, "#bb0")
     print(f"Saved drawn image as {filename}.")
     Cluster.save(filename)
     return Cluster, filename
@@ -1729,6 +1738,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
 if __name__ == "__main__":
     load_dotenv()
+    import tests
     if os.getenv("TESTING") == "True":
         client.run(os.getenv("DISCORD_TESTING_TOKEN"))
     else:
