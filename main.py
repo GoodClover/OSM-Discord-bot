@@ -1258,21 +1258,19 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
-    tile_offset = (center_x % 1, center_y % 1)
+    tile_offset = ((center_x+(tiles_x%2)/2) % 1, (center_y+(tiles_x%2)/2) % 1)
     return xmin, xmax, ymin, ymax, tile_offset
 
 
-async def get_image_cluster(
-    lat_deg: float,
-    lon_deg: float,
-    zoom: int,
-    tile_url: str = config["tile_url"],
-) -> tuple[File, str]:
+async def get_image_cluster(lat_deg: float, lon_deg: float,
+    zoom: int, tile_url: str = config["tile_url"]) -> tuple[File, str]:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    frag = zoom, lat_deg, lon_deg
+    tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
     errorlog = []
     Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
     for xtile in range(xmin, xmax + 2):
@@ -1281,13 +1279,7 @@ async def get_image_cluster(
             try:
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
-                Cluster.paste(
-                    tile,
-                    box=(
-                        int((xtile - xmin + tile_offset[0]) * tile_w),
-                        int((ytile - ymin + tile_offset[1]) * tile_h),
-                    ),
-                )
+                Cluster.paste(tile, tile2pixel((xtile, ytile), zoom, tile_range))
             except Exception as e:
                 print(e)
                 errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile, y=ytile)))
@@ -1313,26 +1305,29 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
 
 def wgs2pixel(xy: tuple[float | int, float | int], tile_range: tuple[int,int,int,int,tuple[float,float]], frag: tuple[int, float, float]):
     """Convert geographical coordinates to X-Y coordinates to be used on map."""
+    # Tile range is calculated in get_image_tile_range
     zoom, lat_deg, lon_deg = frag
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     coord = deg2tile_float(xy[0], xy[1], zoom)
-    # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
-            round((coord[1] - ymin + tile_offset[1]) * tile_h))
     # Coord is now actual pixels, where line must be drawn on image.
+    return tile2pixel(coord, zoom, tile_range)
+def tile2pixel(xy, zoom, tile_range):
+    """Convert Z/X/Y tile to map's X-Y coordinates"""
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
+    # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
+    coord = (round((xy[0] - xmin + tile_offset[0]) * tile_w), 
+            round((xy[1] - ymin + tile_offset[1]) * tile_h))
     return coord
-
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
-    zoom, lat_deg, lon_deg = frag
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
+    tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     errorlog = []
     for note in notes:
         # TODO: Unify coordinate conversion functions.
         coord = wgs2pixel(note, tile_range, frag)
+        print(coord)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
             icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2),
@@ -1342,6 +1337,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
             icon_pos = (int(coord[0] - open_note_icon_size[0] / 2),
                         int(coord[1] - open_note_icon_size[1]))
         # https://stackoverflow.com/questions/5324647
+        print(icon_pos)
         Cluster.paste(note_icon, icon_pos, note_icon)
         del note_icon
     Cluster.save(filename)
@@ -1354,11 +1350,9 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # Renderer requires epsg 3587 crs converter. Implemented in deg2tile_float.
     # Use solution similar to get_image_cluster, but use deg2tile_float function to get xtile/ytile.
     # I think tile calculation should be separate from get_image_cluster.
-
-    zoom, lat_deg, lon_deg = frag
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # tile_range = xmin, xmax, ymin, ymax, tile_offset
-    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
+    tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
     # Basic demo for colour picker.
@@ -1554,28 +1548,34 @@ async def on_message(msg: Message) -> None:
         if time_spent > 15:
             # Most direct way to assess difficulty of user's r.
             check_rate_limit(author_id, time_spent)
-        if render_queue:
+        print(time_spent)
+        if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
-            check_rate_limit(author_id, extra=len(render_queue) ** 0.8)
+            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** 0.8)
             # Next step is to calculate map area for render.
-            await status_msg.edit(content=f"Preparing for rendering")
+            await status_msg.edit(content=f"Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
             	zoom = min([zoom, max_note_zoom])
             print(zoom,lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+            cached_files.add(filename)
             errorlog += errors
+
             # Start drawing elements on image.
-            
-            await status_msg.edit(content=f"Rendering elements to map.")
-            cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+            if render_queue:
+                await status_msg.edit(content=f"Rendering elements to map.")
+                cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+                cached_files.add(filename2)
+            else:
+                filename2 = filename
             if notes_render_queue:
+                await status_msg.edit(content=f"Rendering notes to map.")
                 for note in notes_render_queue:
                     cluster, filename2 = render_notes_on_cluster(cluster, notes_render_queue, (zoom, lat, lon), filename2)
+                cached_files.add(filename2)
             files.append(File(filename2))
-            cached_files.add(filename)
-            cached_files.add(filename2)
 
         for username in users:
             await status_msg.edit(content=f"Processing user/{username}.")
