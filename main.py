@@ -54,7 +54,7 @@ tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
 
 # These 2 are used in check_rate_limit
 time_period = 30
-max_calls = 15
+max_calls = 10
 
 # Following 3 are used by on_message
 max_elements = 10
@@ -201,6 +201,17 @@ async def josmtip_command(ctx: SlashContext) -> None:
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     await ctx.send(random.choice(josm_tips))
+
+
+# Quota query
+@slash.slash(name="quota", description="Shows your spam limit.", guild_ids=guild_ids)  # type: ignore
+async def quota_command(ctx: SlashContext) -> None:
+    if not check_rate_limit(ctx.author_id):
+        await ctx.send("You have hit the limiter.", hidden=True)
+    tnow=time.time()
+    msg='\n'.join(list(map(lambda x: f"Command available in {round(x+time_period-tnow)} sec.",sorted(command_history[ctx.author_id]))))
+    msg+=f"\nYou can still send {max_calls-len(command_history[ctx.author_id])} actions to this bot."
+    await ctx.send(msg, hidden=True)
 
 
 ### TagInfo ###
@@ -1210,7 +1221,7 @@ async def get_image_cluster_old(
     return Cluster
 
 
-def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int]:
+def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = deg2tile_float(lat_deg, lon_deg, zoom)
     xmin, xmax = int(center_x - tiles_x / 2), int(center_x + tiles_x / 2)
@@ -1222,7 +1233,9 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
         ymax -= 1
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
-    return xmin - 1, xmax, ymin, ymax
+    # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
+    tile_offset = (center_x % 1, center_y % 1)
+    return xmin, xmax, ymin, ymax, tile_offset
 
 
 async def get_image_cluster(
@@ -1234,12 +1247,10 @@ async def get_image_cluster(
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
+    # tile_offset - By how many tiles should tile grid shifted somewhere.
+    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
-    tile_offset = deg2tile_float(lat_deg, lon_deg, zoom)
-    # tile_offset - By how many tiles should tile grid shifted up left.
-    tile_offset = (tile_offset[0] % 1, tile_offset[1] % 1)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
+    Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
     for xtile in range(xmin, xmax + 2):
         xtile = xtile % n  # Repeats tiles across -180/180 meridian.
         for ytile in range(ymin, ymax + 2):
@@ -1250,7 +1261,7 @@ async def get_image_cluster(
                     tile,
                     box=(
                         int((xtile - xmin + tile_offset[0]) * tile_w),
-                        int((ytile - ymin - tile_offset[1]) * tile_h),
+                        int((ytile - ymin + tile_offset[1]) * tile_h),
                     ),
                 )
             except Exception as e:
@@ -1287,12 +1298,10 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
     zoom, lat_deg, lon_deg = frag
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    xmin, xmax, ymin, ymax = get_image_tile_range(lat_deg, lon_deg, zoom)
+    # tile_offset - By how many tiles should tile grid shifted somewhere.
+    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
-    tile_offset = deg2tile_float(lat_deg, lon_deg, zoom)
-    # tile_offset - By how many tiles should tile grid shifted up left.
-    tile_offset = (tile_offset[0] % 1, tile_offset[1] % 1)
     # Basic demo for colour picker.
     len_colors = len(element_colors)
     for seg_num in range(len(render_queue)):
@@ -1301,9 +1310,8 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             # Following returns X/Y similar to tile number, but as floats.
             coord = deg2tile_float(coord[0], coord[1], zoom)
             # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-            coord = round((coord[0] - xmin + tile_offset[0]) * tile_w), round(
-                (coord[1] - ymin - tile_offset[1]) * tile_h
-            )
+            coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
+                    round((coord[1] - ymin + tile_offset[1]) * tile_h))
             # Coord is now actual pixels, where line must be drawn on image.
             render_queue[seg_num][i] = coord
         # Draw segment onto image
@@ -1325,6 +1333,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
                 for node_num in range(1, len(render_queue[seg_num])):
                     draw_node(render_queue[seg_num][node_num], draw, color)
     filename = config["map_save_file"].format(t=time.time())
+    if True: draw_node((640.0,640.0), draw, "#088")
     print(f"Saved drawn image as {filename}.")
     Cluster.save(filename)
     return Cluster, filename
