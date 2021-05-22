@@ -31,9 +31,9 @@
         "note_solved": "https://wiki.openstreetmap.org/w/images/6/6a/Closed_note_marker.png"
     },
     "emoji": {
-        "vote_yes": "\ud83d\udc4d",
-        "vote_abstain": "\ud83d\udd90\ufe0f",
-        "vote_no": "\ud83d\udc4e",
+        "vote_yes": "<:vote_yes:793928045802029097>",
+        "vote_abstain": "<:vote_abstain:793928045462421524>",
+        "vote_no": "<:vote_no:793928132871979010>",
         "user": "\ud83d\udc64",
         "changeset": "\ud83d\udcdd",
         "all": "<:all:829318586950615110>",
