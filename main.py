@@ -1,3 +1,4 @@
+# /bin/python3
 from __future__ import annotations
 import asyncio
 
@@ -111,8 +112,8 @@ def is_powerful(member: Member, guild: Guild) -> bool:
     return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
 
 
-def str_to_date(text: str) -> datetime:
-    return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+def str_to_date(text: str, suffix: str="Z") -> datetime:
+    return datetime.strptime(text, "%Y-%m-%dT%H:%M:%S" + suffix)
 
 
 def sanitise(text: str) -> str:
@@ -129,7 +130,8 @@ def check_rate_limit(user, extra=0):
     # Extra is useful in case when user queries lot of elements in one query.
     command_history[user].add(tnow + extra)
     command_history[user]=set(filter(lambda x:x>tnow-time_period, command_history[user]))
-    if command_history[user]> max_calls:
+    # print(user, command_history[user])
+    if len(command_history[user]) > max_calls:
         return False
     return True
 
@@ -369,7 +371,6 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
 
 def get_elm(elm_type: str, elm_id: str | int) -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json")
-
     try:
         elm = res.json()["elements"][0]
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
@@ -686,14 +687,12 @@ def get_note(note_id: str | int) -> dict:
 def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
-
-    embed.url = config["site_url"] + "note/" + str(note["id"])
-
+    # print(note)
+    embed.url = config["site_url"] + "note/" + str(note["properties"]["id"])
     embed.set_footer(
         text=config["copyright_notice"],
         icon_url=config["icon_url"],
     )
-
     # API returns very different result for notes
 
     if note["properties"]["status"] == "closed":
@@ -702,7 +701,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     else:
         closed = False
         embed.set_thumbnail(url=config["symbols"]["note_open"])
-    embed.timestamp = str_to_date(note["properties"]["date_created"])
+    embed.timestamp = str_to_date(note["properties"]["date_created"].replace(' ', 'T')[:19]+'Z')
     if "user" in note["properties"]["comments"][0]:
         creator = note["properties"]["comments"][0]["user"]
         embed.set_author(name=creator, url=note["properties"]["comments"][0]["user_url"])
@@ -714,10 +713,10 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
 
     #### Description ####
     embed.description = ""
-
+    print(note)
     if "comments" in note["properties"] and len(note["properties"]) > 0:
         embed.description += "> " + note["properties"]["comments"][0]["text"].strip().replace("\n", "\n> ") + "\n\n"
-        note["properties"].pop("comment")
+        note["properties"]["comments"].pop(0)
     else:
         embed.description += "*(no comment)*\n\n"
 
@@ -1147,6 +1146,7 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
     # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
+    print(list(map(lambda x:round(x,4), queue_bounds)))
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
@@ -1156,7 +1156,15 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, max_zoom)
-    center_lat = round(tile2deg(zoom, 0, (deg2tile_float(0, min_lat, zoom)[0] + deg2tile_float(0, max_lat, zoom)[0]) / 2)[0],5)
+    tile_y_min = deg2tile_float(max_lat,0, zoom)[1]
+    tile_y_max= deg2tile_float(min_lat,0, zoom)[1]
+    print(zoom, center_lon)
+    if zoom<10:
+        # At low zoom levels and high latitudes, mercator's distortion must be accounted
+        center_lat = round(tile2deg(zoom, 0, (tile_y_max + tile_y_min)/2)[0], 5)
+    else:
+        center_lat=(max_lat-min_lat)/2+min_lat
+    print(center_lat, min_lat, max_lat)
     return (zoom, center_lat, center_lon)
 
 
@@ -1204,17 +1212,17 @@ async def get_image_cluster_old(
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int]:
     # Following line is duplicataed at calc_preview_area()
-    center_x, center_y = deg2tile(lat_deg, lon_deg, zoom)
-    xmin, xmax = center_x - int(tiles_x / 2), center_x + int(tiles_x / 2)
+    center_x, center_y = deg2tile_float(lat_deg, lon_deg, zoom)
+    xmin, xmax = int(center_x - tiles_x / 2), int(center_x + tiles_x / 2)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     if tiles_x % 2 == 0:
         xmax -= 1
-    ymin, ymax = center_y - int(tiles_y / 2), center_y + int(tiles_y / 2)
+    ymin, ymax = int(center_y - tiles_y / 2), int(center_y + tiles_y / 2)
     if tiles_y % 2 == 0:
         ymax -= 1
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
-    return xmin, xmax, ymin, ymax
+    return xmin - 1, xmax, ymin, ymax
 
 
 async def get_image_cluster(
@@ -1241,7 +1249,7 @@ async def get_image_cluster(
                 Cluster.paste(
                     tile,
                     box=(
-                        int((xtile - xmin - tile_offset[0]) * tile_w),
+                        int((xtile - xmin + tile_offset[0]) * tile_w),
                         int((ytile - ymin - tile_offset[1]) * tile_h),
                     ),
                 )
@@ -1261,7 +1269,7 @@ def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
 
 def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     # https://stackoverflow.com/questions/2980366
-    r = 10
+    r = 5
     x, y = coord
     leftUpPoint = (x - r, y - r)
     rightDownPoint = (x + r, y + r)
@@ -1293,7 +1301,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
             # Following returns X/Y similar to tile number, but as floats.
             coord = deg2tile_float(coord[0], coord[1], zoom)
             # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-            coord = round((coord[0] - xmin - tile_offset[0]) * tile_w), round(
+            coord = round((coord[0] - xmin + tile_offset[0]) * tile_w), round(
                 (coord[1] - ymin - tile_offset[1]) * tile_h
             )
             # Coord is now actual pixels, where line must be drawn on image.
@@ -1303,7 +1311,15 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
         draw_line(render_queue[seg_num], draw, color)
         # Maybe nodes shouldn't be rendered, if way has many, let's say 80+ nodes,
         # because it would become too cluttered?
+        # This is very indecisive function.
+        draw_nodes=False
         if len(render_queue[seg_num]) < 80:
+            draw_nodes=True
+        if len(render_queue) > 40:
+            draw_nodes=False
+        if len(render_queue[seg_num]) == 1:
+            draw_nodes=True
+        if draw_nodes:
             draw_node(render_queue[seg_num][0], draw, color)
             if len(render_queue[seg_num]) > 1:
                 for node_num in range(1, len(render_queue[seg_num])):
@@ -1357,7 +1373,7 @@ async def on_message(msg: Message) -> None:
         await msg.channel.send("Try `/googlebad` :wink:")
     elif msg.content.startswith("€showmap"):
         await msg.channel.send("Try `/showmap` :map:")
-
+    msg_arrived = time.time()
     #### Inline linking ####
     # Find matches
     # elm[0] - element type (node/way/relation/changeset)
@@ -1390,9 +1406,14 @@ async def on_message(msg: Message) -> None:
         if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
             ask_confirmation = True
     # Ask user confirmation by reacting with :mag_right: emoji.
+    reaction_string = "🔎"  # :mag_right:
+    image_emoji = "🖼️"  # :frame_photo: 
+    
+    # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
+    add_image = False
+    add_image = True
+    
     if ask_confirmation:
-        reaction_string = "🔎"  # :mag_right:
-        image_emoji = "🖼️"  # :frame_photo: 
         await msg.add_reaction(reaction_string)
         await msg.add_reaction(image_emoji)
 
@@ -1407,6 +1428,8 @@ async def on_message(msg: Message) -> None:
         else:  # User responded
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
+            if image_emoji == reaction:
+                add_image = True
     render_queue: list[list[tuple[float, float]]] = []
 
     # User quota is checked after they confirmed element lookup.
@@ -1415,12 +1438,8 @@ async def on_message(msg: Message) -> None:
         rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
         if not rating:
             return
-
-    # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-    if image_emoji == reaction:
-        add_image = True
-    else:
-        add_image = False
+    #await msg.add_reaction(image_emoji)
+    print(add_image)
     async with msg.channel.typing():
         # Create the messages
         status_msg = await msg.channel.send("This is status message, that will show progress of your request.")
@@ -1453,16 +1472,29 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"Processing {elm_type}/{note_id}.")
                 try:
                     embeds.append(note_embed(get_note(note_id)))
+                    if add_image:
+                        pass
+                        # TODO: Add node rendering
+                        # render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError:
                     errorlog.append((elm_type, note_id))
-
+        time_spent = time.time() - msg_arrived
+        if time_spent > 15:
+            # Most direct way to assess difficulty of user's r.
+            check_rate_limit(author_id, time_spent)
         if render_queue:
+            # Add extra to quota for querying large relations
+            check_rate_limit(author_id, extra=len(render_queue) ** 0.8)
             # Next step is to calculate map area for render.
+            await status_msg.edit(content=f"Preparing for rendering")
             bbox = get_render_queue_bounds(render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
+            print(zoom,lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             # Start drawing elements on image.
+            
+            await status_msg.edit(content=f"Rendering elements to map.")
             cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
             files.append(File(filename2))
             cached_files.add(filename)
@@ -1482,7 +1514,7 @@ async def on_message(msg: Message) -> None:
             errorlog += errors
             files.append(File(filename))
             cached_files.add(filename)
-
+        await status_msg.edit(content=f"Starting upload")
         # Send the messages
         if len(embeds) > 0:
             await msg.channel.send(embed=embeds[0], reference=msg)
@@ -1500,7 +1532,7 @@ async def on_message(msg: Message) -> None:
 
         if len(errorlog) > 0:
             for element_type, element_id in errorlog:
-                pass  # await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+                await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
 
     # Clean up files
     for filename in cached_files:
