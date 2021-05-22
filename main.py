@@ -67,6 +67,7 @@ max_note_zoom = 17
 
 reaction_string = "🔎"  # :mag_right:
 image_emoji = "🖼️"  # :frame_photo: 
+cancel_emoji = "❌"  # :x:
 
 
 HEADERS = {
@@ -1310,22 +1311,28 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     twoPointList = [leftUpPoint, rightDownPoint]
     draw.ellipse(twoPointList, fill=colour)
 
-def tile2pixel(xy: tuple[float | int, float | int], frag: tuple[int, float, float]):
+def wgs2pixel(xy: tuple[float | int, float | int], tile_range: tuple[int,int,int,int,tuple[float,float]], frag: tuple[int, float, float]):
+    """Convert geographical coordinates to X-Y coordinates to be used on map."""
     zoom, lat_deg, lon_deg = frag
-    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    # tile_offset - By how many tiles should tile grid shifted somewhere.
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
+    coord = deg2tile_float(xy[0], xy[1], zoom)
+    # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
+    coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
+            round((coord[1] - ymin + tile_offset[1]) * tile_h))
+    # Coord is now actual pixels, where line must be drawn on image.
+    return coord
 
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
     zoom, lat_deg, lon_deg = frag
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
     for note in notes:
         # TODO: Unify coordinate conversion functions.
-        coord = deg2tile_float(note[0], note[1], zoom)
-        # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-        coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
-                round((coord[1] - ymin + tile_offset[1]) * tile_h))
+        coord = wgs2pixel(note, tile_range, frag)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
             icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2),
@@ -1349,29 +1356,21 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # I think tile calculation should be separate from get_image_cluster.
 
     zoom, lat_deg, lon_deg = frag
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    # tile_range = xmin, xmax, ymin, ymax, tile_offset
+    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
     # Convert geographical coordinates to X-Y coordinates to be used on map.
     draw = ImageDraw.Draw(Cluster)  # Not sure what it does, just following https://stackoverflow.com/questions/59060887
     # Basic demo for colour picker.
     len_colors = len(element_colors)
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
-            coord = render_queue[seg_num][i]
-            # Following returns X/Y similar to tile number, but as floats.
-            coord = deg2tile_float(coord[0], coord[1], zoom)
-            # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-            coord = (round((coord[0] - xmin + tile_offset[0]) * tile_w), 
-                    round((coord[1] - ymin + tile_offset[1]) * tile_h))
-            # Coord is now actual pixels, where line must be drawn on image.
-            render_queue[seg_num][i] = coord
+            render_queue[seg_num][i] = wgs2pixel(render_queue[seg_num][i], tile_range, frag)
         # Draw segment onto image
         color = element_colors[seg_num % len_colors]
         draw_line(render_queue[seg_num], draw, color)
         # Maybe nodes shouldn't be rendered, if way has many, let's say 80+ nodes,
-        # because it would become too cluttered?
-        # This is very indecisive function.
+        # because it would become too cluttered?  This is very indecisive function.
         draw_nodes=False
         if len(render_queue[seg_num]) < 80:
             draw_nodes=True
@@ -1387,11 +1386,9 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     filename = config["map_save_file"].format(t=time.time())
     if True: 
         draw_node((640.0,640.0), draw, "#088")
-        coord = deg2tile_float(lat_deg, lon_deg, zoom)
-        coord = (round((coord[0] - xmin - tile_offset[0]) * tile_w), 
-                 round((coord[1] - ymin - tile_offset[1]) * tile_h))
-        print(640,640, ' ', *coord)
+        coord = wgs2pixel(lat_deg, lon_deg,tile_range, frag)
         draw_node(coord, draw, "#bb0")
+        print(640,640, ' ', *coord)
     print(f"Saved drawn image as {filename}.")
     Cluster.save(filename)
     return Cluster, filename
@@ -1462,9 +1459,10 @@ async def on_message(msg: Message) -> None:
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id
+    check_rate_limit(author_id, -time_period)  # Refresh command history
     if queried_elements_count == 0:
         return
-    elif queried_elements_count > 10:
+    elif queried_elements_count > max_elements - len(command_history[author_id]):
         # If there are too many elements, just ignore.
         return
 
@@ -1481,20 +1479,25 @@ async def on_message(msg: Message) -> None:
     if ask_confirmation:
         await msg.add_reaction(reaction_string)
         await msg.add_reaction(image_emoji)
+        await msg.add_reaction(cancel_emoji)
 
         def check(reaction, user_obj):
-            return user_obj == msg.author and ( str(reaction.emoji) == reaction_string or str(reaction.emoji) == image_emoji) 
+            return user_obj == msg.author and ( str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji})
         try:
             reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
         except asyncio.TimeoutError:  # User didn't respond
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
+            await msg.clear_reaction(cancel_emoji)
             return
         else:  # User responded
             await msg.clear_reaction(reaction_string)
             await msg.clear_reaction(image_emoji)
+            await msg.clear_reaction(cancel_emoji)
             if image_emoji == str(reaction.emoji):
                 add_image = True
+            elif cancel_emoji == str(reaction.emoji):
+                return
             else:
                 add_image = False
     render_queue: list[list[tuple[float, float]]] = []
