@@ -374,7 +374,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         ),
         create_option(
             name="extras",
-            description="Comma seperated list of extras from `info`, `tags` and `members`.",
+            description="Comma seperated list of extras from `info`, `tags`, `map` and `members`.",
             option_type=3,
             required=False,
         ),
@@ -387,7 +387,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
-        if extra != "" and extra not in ["info", "tags", "members"]:
+        if extra != "" and extra not in ["info", "tags", "members", "map"]:
             await ctx.send(
                 f"Unrecognised extra `{extra}`.\nPlease choose from `info`, `tags` and `members`.", hidden=True
             )
@@ -402,9 +402,24 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     except ValueError:
         await ctx.send(f"{elm_type.capitalize()} `{elm_id}` not found.", hidden=True)
         return
-
     await ctx.defer()
-    await ctx.send(embed=elm_embed(elm, extras_list))
+    files = []
+    if "map" in extras_list:
+        render_queue = await elms_to_render(elm_type, elm_id)
+        check_rate_limit(ctx.author_id, extra=len(render_queue) ** rendering_rate_exp)
+        bbox = get_render_queue_bounds(render_queue)
+        zoom, lat, lon = calc_preview_area(bbox)
+        cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+        cached_files.add(filename)
+        cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+        cached_files.add(filename2)
+    embed = elm_embed(elm, extras_list)
+    file=None
+    if "map" in extras_list:
+        print('attachment://'+filename2.split('/')[-1])
+        embed.set_image(url='attachment://'+filename2.split('/')[-1])
+        file=File(filename2)
+    await ctx.send(embed=embed, file=file)
 
 
 def get_elm(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
@@ -1391,6 +1406,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     if True: 
         draw_node((640.0,640.0), draw, "#088")
         coord = wgs2pixel((frag[1], frag[2]),tile_range, frag)
+        print("Map alignment error: ", coord[0]-640, coord[1]-640)
         draw_node(coord, draw, "#bb0")
         print(640,640, ' ', *coord)
     print(f"Saved drawn image as {filename}.")
