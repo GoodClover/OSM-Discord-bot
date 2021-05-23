@@ -407,8 +407,8 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     await ctx.send(embed=elm_embed(elm, extras_list))
 
 
-def get_elm(elm_type: str, elm_id: str | int) -> dict:
-    res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json")
+def get_elm(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
+    res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
     try:
         elm = res.json()["elements"][0]
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
@@ -582,7 +582,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
             return
 
     try:
-        changeset = get_changeset(changeset_id)
+        changeset = get_changeset(changeset_id, "discussion" in extras)
     except ValueError:
         await ctx.send(f"Changeset `{changeset_id}` not found.", hidden=True)
         return
@@ -591,10 +591,13 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     await ctx.send(embed=changeset_embed(changeset, extras_list))
 
 
-def get_changeset(changeset_id: str | int) -> dict:
+def get_changeset(changeset_id: str | int, discussion:bool=False) -> dict:
     """Shorthand for `get_elm("changeset", changeset_id)`"""
     try:
-        return get_elm("changeset", changeset_id)
+        discussion_suffix = ""
+        if discussion:
+            discussion_suffix = "?include_discussion=true"
+        return get_elm("changeset", changeset_id, discussion_suffix)
     except ValueError:
         raise ValueError(f"Changeset `{changeset_id}` not found")
 
@@ -602,10 +605,7 @@ def get_changeset(changeset_id: str | int) -> dict:
 def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
-    discussion_suffix = ""
-    if "discussion" in extras:
-        discussion_suffix = "?include_discussion=true"
-    embed.url = config["site_url"] + "changeset/" + str(changeset["id"] + discussion_suffix)
+    embed.url = config["site_url"] + "changeset/" + str(changeset["id"])
 
     embed.set_footer(
         text=config["copyright_notice"],
@@ -629,8 +629,6 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         changeset["tags"].pop("comment")
     else:
         embed.description += "*(no comment)*\n\n"
-
-    embed.description += f"[OSMCha](<https://osmcha.org/changesets/{changeset['id']}>)"
 
     #### Image ####
     # * This would create significant stress to the OSM servers, so I don't reccomend it.
@@ -672,10 +670,12 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     if "discussion" in extras:
         if changeset["comments_count"] > 0:
             # Example: *- User opened on 2020-04-14 08:00*
-            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} {x['action']} on {x['date'][:16].replace('T',' ')}*", changeset["discussion"]))) + "\n\n"
+            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} on {x['date'][:16].replace('T',' ')}*", changeset["discussion"]))) + "\n\n"
         else:
             embed.description += "*No comments*\n\n"
-
+    if len(embed.description) > 1980:
+        embed.description = embed.description[:1970].strip()+'...\n\n'
+    embed.description += f"[OSMCha](https://osmcha.org/changesets/{changeset['id']})"
     return embed
 
 
@@ -1513,7 +1513,7 @@ async def on_message(msg: Message) -> None:
     #    if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
     #        ask_confirmation = True
     if len(elms + notes) != 0:
-    	ask_confirmation = True
+        ask_confirmation = True
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     add_embedded = True
     wait_for_user_start = time.time()
@@ -1585,7 +1585,7 @@ async def on_message(msg: Message) -> None:
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
-            	zoom = min([zoom, max_note_zoom])
+                zoom = min([zoom, max_note_zoom])
             print(zoom,lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             cached_files.add(filename)
