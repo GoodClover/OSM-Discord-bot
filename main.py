@@ -1399,6 +1399,44 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # I barely know how to draw lines in PIL
 
 
+def ask_render_confirmation(msg):
+    # Ask user confirmation by reacting with 4 emojis
+    await msg.add_reaction(reaction_string)
+    await msg.add_reaction(image_emoji)
+    await msg.add_reaction(embedded_emoji)
+    await msg.add_reaction(cancel_emoji)
+
+    def check(reaction, user_obj):
+        return user_obj == msg.author and ( str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji, embedded_emoji})
+    try:
+        reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
+    except asyncio.TimeoutError:  # User didn't respond
+        await msg.clear_reaction(reaction_string)
+        await msg.clear_reaction(image_emoji)
+        await msg.clear_reaction(embedded_emoji)
+        await msg.clear_reaction(cancel_emoji)
+        add_image = False
+        add_embedded = False
+    else:  # User responded
+        await msg.clear_reaction(reaction_string)
+        await msg.clear_reaction(image_emoji)
+        await msg.clear_reaction(embedded_emoji)
+        await msg.clear_reaction(cancel_emoji)
+        if image_emoji == str(reaction.emoji):
+            add_image = True
+            add_embedded = False
+        elif embedded_emoji == str(reaction.emoji):
+            add_image = False
+            add_embedded = True
+        elif cancel_emoji == str(reaction.emoji):
+            add_image = False
+            add_embedded = False
+        else:
+            add_embedded = True
+            add_image = True
+    return add_image, add_embedded
+
+
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
@@ -1477,42 +1515,10 @@ async def on_message(msg: Message) -> None:
     if len(elms + notes) != 0:
     	ask_confirmation = True
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
-    add_image = False
-    add_image = True
+    add_embedded = True
     wait_for_user_start = time.time()
     if ask_confirmation:
-        # Ask user confirmation by reacting with 4 emojis
-        await msg.add_reaction(reaction_string)
-        await msg.add_reaction(image_emoji)
-        await msg.add_reaction(embedded_emoji)
-        await msg.add_reaction(cancel_emoji)
-
-        def check(reaction, user_obj):
-            return user_obj == msg.author and ( str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji, embedded_emoji})
-        try:
-            reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
-        except asyncio.TimeoutError:  # User didn't respond
-            await msg.clear_reaction(reaction_string)
-            await msg.clear_reaction(image_emoji)
-            await msg.clear_reaction(embedded_emoji)
-            await msg.clear_reaction(cancel_emoji)
-            return
-        else:  # User responded
-            await msg.clear_reaction(reaction_string)
-            await msg.clear_reaction(image_emoji)
-            await msg.clear_reaction(embedded_emoji)
-            await msg.clear_reaction(cancel_emoji)
-            if image_emoji == str(reaction.emoji):
-                add_image = True
-                add_embedded = False
-            elif embedded_emoji == str(reaction.emoji):
-                add_image = False
-                add_embedded = True
-            elif cancel_emoji == str(reaction.emoji):
-                return
-            else:
-                add_embedded = True
-                add_image = True
+        add_image, add_embedded = ask_render_confirmation(msg)
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
 
