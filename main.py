@@ -784,7 +784,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
         else:
             embed.description += "*No comments*\n\n"
     if creator != "*Anonymous*":
-        embed.description += f"[Other notes by {creator}.](<https://www.openstreetmap.org/user/{creator}/notes>)"
+        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator}/notes)"
     return embed
 
 
