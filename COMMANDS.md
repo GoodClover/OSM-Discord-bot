@@ -72,6 +72,8 @@ Using inline command will usually make bot to react to your message with 4 emoji
 - 🛏️ (`:bed:`) - Shows every element's individual embedded.
 - ❌ (`:x:`) - Cancel request, all emojis will be removed and bot posts nothing. Default action triggered if no input is detected in 15 seconds.
 
+No emojis will be added, if user has exceeded their quota or would definitely exceed while procesing the request (see below).
+
 ## Show a section of the map
 
 `/showmap <URL>`
@@ -103,4 +105,19 @@ Allows people to post suggestions and vote with reactions in a set channel.
 `/close_suggestion <message-ID> <reason>` (Power people only)
 
 Allows suggestions to get accepted/rejected with a freeform reason.
+
+## Quota
+
+`/quota`
+
+All commands in are rate-limited and the personal limit is same for all commands (except `/googlebad` where going over limit triggers easter egg). As of May 2021, limit is 10 function calls per 30 seconds. If you have passed the threshold, bot will reply with hidden message about crossing the line. You can use `/quota` to see how many interactions are left. Output is private and it's formatted similarly to Overpass quota page.
+
+### Special treatment of inline-commands
+
+Normally, no slash command have more than 30 sec cooldown. However, since inline-commands support multiple request per single message and they can be **very** resource-intesive, one command message will be counted as muliple actions, based on different metrics somewhat comparable to Overpass-API. As mentioned before, any request asking for more than maximum amount of allowed items will be ignored.
+
+- Per every requested feature, additional cooldown time is increased exponentially, up to 130 sec for 10th element. Since these counters are ran before actual element processing, most of them usually count down to zero before bot completes.
+- If querying elements from Overpass took more than 15 seconds, single cooldown linearly correlated to time spent is applied
+- If element rendering is enabled, single cooldown related to amount of way segments is added.
+- If processing outputs (render images and sending mesages) took more than 10 seconds, single cooldown linearly correlated to time spent is applied.
 

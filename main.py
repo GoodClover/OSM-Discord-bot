@@ -60,6 +60,7 @@ max_calls = 10
 max_elements = 10
 element_count_exp = round(math.log(max_calls, max_elements), 2)  # 1.17
 rate_extra_exp = 1.8
+rendering_rate_exp = 0.8
 
 # Used in render_elms_on_cluster. List of colours to be cycled.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
@@ -1462,7 +1463,7 @@ async def on_message(msg: Message) -> None:
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id
-    check_rate_limit(author_id, -time_period)  # Refresh command history
+    check_rate_limit(author_id, -time_period - 1)  # Refresh command history
     if queried_elements_count == 0:
         return
     elif queried_elements_count > max_elements - len(command_history[author_id]):
@@ -1478,7 +1479,7 @@ async def on_message(msg: Message) -> None:
     # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     add_image = False
     add_image = True
-    
+    wait_for_user_start = time.time()
     if ask_confirmation:
         # Ask user confirmation by reacting with 4 emojis
         await msg.add_reaction(reaction_string)
@@ -1512,14 +1513,15 @@ async def on_message(msg: Message) -> None:
             else:
                 add_embedded = True
                 add_image = True
+    wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
 
     # User quota is checked after they confirmed element lookup.
     for i in range(int(queried_elements_count ** element_count_exp) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
         rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
-        if not rating:
-            return
+        # if not rating:
+        #     return
     print(add_image)
     async with msg.channel.typing():
         # Create the messages
@@ -1563,14 +1565,15 @@ async def on_message(msg: Message) -> None:
                                                    note['properties']['status'] == 'closed'))
                 except ValueError:
                     errorlog.append((elm_type, note_id))
-        time_spent = time.time() - msg_arrived
+        time_spent = time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start)
         if time_spent > 15:
-            # Most direct way to assess difficulty of user's r.
+            # Most direct way to assess difficulty of user's request.
             check_rate_limit(author_id, time_spent)
-        print(time_spent)
+        print(f"Script spent {time_spent} sec on downloading elements.")
+        msg_arrived = time.time()
         if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
-            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** 0.8)
+            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** rendering_rate_exp)
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
@@ -1627,8 +1630,17 @@ async def on_message(msg: Message) -> None:
         await status_msg.delete()
 
         if len(errorlog) > 0:
-            for element_type, element_id in errorlog:
+            for element_type, element_id in errorlog[:5]:
                 await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+            if len(errorlog) > 5:
+                await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
+
+        time_spent = time.time() - msg_arrived
+        # msg_arrived actually means time since start of rendering
+        if time_spent > 10:
+            # Most direct way to assess difficulty of user's request.
+            check_rate_limit(author_id, time_spent)
+        print(f"Script spent {time_spent} sec on preparing output (render, embeds, files, errors).")
 
     # Clean up files
     for filename in cached_files:
