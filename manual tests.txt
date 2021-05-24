@@ -12,3 +12,7 @@ Test 3:
 Command: node/1
 User action: React with :wastebasket. to bot's reply
 Expected behaviour: Bot removes it's message.
+
+Test 4:
+Command: note/2670243, note/2676014, note/2158900, note/2218136
+Expected behaviour: All notes should work.
