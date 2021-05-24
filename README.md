@@ -37,7 +37,7 @@ DISCORD_TESTING_TOKEN=<optional-testing-bot-token>
 
 ## License
 
-[DBAD Public License](https://github.com/philsturgeon/dbad/blob/master/LICENSE.md)
+[DBAD Public License](LICENSE.md)
 
 (Look, I doubt anyone other than myself will ever use/host this code.
 If you really don't like the license then message me for explicit permisson or something, I'll likely do it.)
