@@ -29,6 +29,7 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 
 - `info`: view extra info about the element.
 - `discussion`: show the changesets's discussion.
+- `map`: show the changeset bounding box on a map.
 - `tags`: show the changesets's tags.
 
 ### View notes
