@@ -1357,18 +1357,22 @@ async def get_image_cluster(
     frag = zoom, lat_deg, lon_deg
     tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     xmin, xmax, ymin, ymax, tile_offset = tile_range
+    print(tile_range)
     errorlog = []
     Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
-    for xtile in range(xmin, xmax + 2):
-        xtile = xtile % n  # Repeats tiles across -180/180 meridian.
-        for ytile in range(ymin, ymax + 2):
+    for xtile in range(xmin-1, xmax + 2):
+        # print(xtile, xtile % n)
+        xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
+        # Xtile is preserved, because it's used for plotting it on map
+        for ytile in range(ymin, min([ymax + 2, n])):
+            # print(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile))
             try:
-                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
+                res = requests.get(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
                 Cluster.paste(tile, tile2pixel((xtile, ytile), zoom, tile_range))
             except Exception as e:
                 print(e)
-                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile, y=ytile)))
+                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)))
     filename = config["map_save_file"].format(t=time.time())
     Cluster.save(filename)
     return Cluster, filename, errorlog
