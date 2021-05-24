@@ -49,12 +49,13 @@ recent_googles: set = set()
 command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 ### Rendering ###
-max_zoom = 19
+max_zoom = 19  # Maximum zoom level without notes.
+max_note_zoom = 17  # Maximum zoom, when notes are present on map.
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
+tile_margin_y, tile_margin_x = 0.1, 0.1  # How much free space is left at edges
 # Used in render_elms_on_cluster. List of colours to be cycled.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
-max_note_zoom = 17
 
 ### Rate-limiting ###
 # These 2 are used in check_rate_limit
@@ -1244,10 +1245,10 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
-    zoom_x = int(math.log2((360 / delta_lon) * tiles_x))
+    zoom_x = int(math.log2((360 / delta_lon) * (tiles_x - 2 * tile_margin_x)))
     center_lon = delta_lon / 2 + min_lon
     zoom_y = max_zoom + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y:
+    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y - 2 * tile_margin_y:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, max_zoom)
     tile_y_min = deg2tile_float(max_lat,0, zoom)[1]
