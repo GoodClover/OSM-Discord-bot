@@ -406,7 +406,6 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     except ValueError:
         await ctx.send(f"{elm_type.capitalize()} `{elm_id}` not found.", hidden=True)
         return
-    await ctx.defer()
     files = []
     if "map" in extras_list:
         await ctx.defer()
@@ -1309,7 +1308,7 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
     tile_offset = ((center_x+(tiles_x%2)/2) % 1, (center_y+(tiles_x%2)/2) % 1)
-    return xmin, xmax, ymin, ymax, tile_offset
+    return xmin, xmax - 1, ymin, ymax -1, tile_offset
 
 
 async def get_image_cluster(lat_deg: float, lon_deg: float,
@@ -1367,8 +1366,8 @@ def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((xy[0] - xmin + tile_offset[0]) * tile_w), 
-            round((xy[1] - ymin + tile_offset[1]) * tile_h))
+    coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), 
+            round((xy[1] - ymin - tile_offset[1]) * tile_h))
     return coord
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
     # tile_offset - By how many tiles should tile grid shifted somewhere.
@@ -1552,9 +1551,8 @@ async def on_message(msg: Message) -> None:
     #for match in elms + changesets + notes:
     #    if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
     #        ask_confirmation = True
-    if len(elms + notes) != 0:
+    if len(elms + notes + changesets) != 0:
         ask_confirmation = True
-    # TODO: Give a message upon stuff being 'not found', rather than just ignoring it.
     add_embedded = True
     wait_for_user_start = time.time()
     if ask_confirmation:
@@ -1592,7 +1590,11 @@ async def on_message(msg: Message) -> None:
             for changeset_id in changeset_ids:
                 await status_msg.edit(content=f"Processing {elm_type}/{changeset_id}.")
                 try:
-                    embeds.append(changeset_embed(get_changeset(changeset_id)))
+                    changeset = get_changeset(changeset_id)
+                    if add_embedded:
+                        embeds.append(changeset_embed(changeset))
+                    if add_image:
+                        render_queue += changeset["geometry"]
                 except ValueError:
                     errorlog.append((elm_type, changeset_id))
 
