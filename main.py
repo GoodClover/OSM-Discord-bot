@@ -69,6 +69,7 @@ reaction_string = "🔎"  # :mag_right:
 image_emoji = "🖼️"  # :frame_photo:
 cancel_emoji = "❌"  # :x:
 embedded_emoji = "🛏️"  # :bed:
+delete_msg_emoji = "🗑️"  # :wastebasket:
 
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
@@ -1414,7 +1415,7 @@ def wgs2pixel(
 
 def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
-    # Basically, all this function does: knowing map tile number, place it on screen.
+    # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
     coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), round((xy[1] - ymin - tile_offset[1]) * tile_h))
@@ -1532,12 +1533,10 @@ async def ask_render_confirmation(msg):
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name == "🗑️":
+    if payload.emoji.name == delete_msg_emoji:
         # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
         msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
-
         if msg.author == client.user:  # Ensure message was created by the bot
-
             # Powerful users can delete anything
             if is_powerful(payload.member, client.get_guild(payload.guild_id)):
                 await msg.delete()
