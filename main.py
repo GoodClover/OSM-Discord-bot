@@ -1009,7 +1009,7 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
         # This works though so eh ¯\_(ツ)_/¯
         msg = f"<{config['site_url']}#map={zoom_int}/{lat_deg}/{lon_deg}>"
 
-        img_msg = await ctx.channel.send(msg, file=image_file)
+        img_msg = await ctx.channel.send(msg, file=File(filename))
 
     await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
 
@@ -1343,7 +1343,11 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
+    print("Tile offset calculation")
+    print(center_x, tiles_x, tiles_x % 2, (tiles_x % 2) / 2, (center_x + (tiles_x % 2) / 2))
     tile_offset = ((center_x + (tiles_x % 2) / 2) % 1, (center_y + (tiles_x % 2) / 2) % 1)
+    # tile_offset = 0,0
+    print("Offset:", tile_offset)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
@@ -1412,6 +1416,7 @@ def wgs2pixel(
 
 def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
+    # Basically, all this function does: knowing map tile number, place it on screen.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
     coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), round((xy[1] - ymin - tile_offset[1]) * tile_h))
@@ -1607,16 +1612,15 @@ async def on_message(msg: Message) -> None:
     wait_for_user_start = time.time()
     if ask_confirmation:
         add_image, add_embedded = await ask_render_confirmation(msg)
+        print(add_image)
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
-
     # User quota is checked after they confirmed element lookup.
     for i in range(int(queried_elements_count ** element_count_exp) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
         rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
         # if not rating:
         #     return
-    print(add_image)
     async with msg.channel.typing():
         # Create the messages
         status_msg = await msg.channel.send("This is status message, that will show progress of your request.")
@@ -1667,7 +1671,7 @@ async def on_message(msg: Message) -> None:
                         )
                 except ValueError:
                     errorlog.append((elm_type, note_id))
-        time_spent = time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start)
+        time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start),3)
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
             check_rate_limit(author_id, time_spent)
@@ -1739,7 +1743,7 @@ async def on_message(msg: Message) -> None:
             if len(errorlog) > 5:
                 await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
 
-        time_spent = time.time() - msg_arrived
+        time_spent = round(time.time() - msg_arrived, 3)
         # msg_arrived actually means time since start of rendering
         if time_spent > 10:
             # Most direct way to assess difficulty of user's request.
