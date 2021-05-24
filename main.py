@@ -1570,14 +1570,16 @@ async def on_message(msg: Message) -> None:
     # elm[1] - separator used
     # elm[2] - element ID
     elms = [
-        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1]) for elm in ELM_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
+        for elm in ELM_INLINE_REGEX.findall(msg.clean_content)
     ]
     changesets = [
-        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
+        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
         for elm in CHANGESET_INLINE_REGEX.findall(msg.clean_content)
     ]
     notes = [
-        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1]) for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
+        for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
     ]
     users = [thing.split("/")[1] for thing in USER_INLINE_REGEX.findall(msg.clean_content)]
     map_frags = MAP_FRAGMENT_INLINE_REGEX.findall(msg.clean_content)
