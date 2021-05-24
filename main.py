@@ -46,7 +46,7 @@ MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
 cached_files: set = set()
 # Set of unix timestamps.
 recent_googles: set = set()
-command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
+command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 ### Rendering ###
 max_zoom = 19  # Maximum zoom level without notes.
@@ -68,9 +68,9 @@ rate_extra_exp = 1.8
 rendering_rate_exp = 0.8
 
 reaction_string = "🔎"  # :mag_right:
-image_emoji = "🖼️"  # :frame_photo: 
+image_emoji = "🖼️"  # :frame_photo:
 cancel_emoji = "❌"  # :x:
-embedded_emoji = "🛏️" # :bed:
+embedded_emoji = "🛏️"  # :bed:
 
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
@@ -144,7 +144,7 @@ def is_powerful(member: Member, guild: Guild) -> bool:
     return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
 
 
-def str_to_date(text: str, suffix: str="Z") -> datetime:
+def str_to_date(text: str, suffix: str = "Z") -> datetime:
     return datetime.strptime(text, "%Y-%m-%dT%H:%M:%S" + suffix)
 
 
@@ -156,12 +156,12 @@ def sanitise(text: str) -> str:
 
 def check_rate_limit(user, extra=0):
     # Sorry for no typehints, i don't know what types to have
-    tnow=round(time.time(), 1)
+    tnow = round(time.time(), 1)
     if user not in command_history:
         command_history[user] = set()
     # Extra is useful in case when user queries lot of elements in one query.
     command_history[user].add(tnow + extra)
-    command_history[user]=set(filter(lambda x:x>tnow-time_period, command_history[user]))
+    command_history[user] = set(filter(lambda x: x > tnow - time_period, command_history[user]))
     # print(user, command_history[user])
     if len(command_history[user]) > max_calls:
         return False
@@ -240,9 +240,16 @@ async def josmtip_command(ctx: SlashContext) -> None:
 async def quota_command(ctx: SlashContext) -> None:
     if not check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
-    tnow=time.time()
-    msg='\n'.join(list(map(lambda x: f"Command available in {round(x+time_period-tnow)} sec.",sorted(command_history[ctx.author_id]))))
-    msg+=f"\nYou can still send {max_calls-len(command_history[ctx.author_id])} actions to this bot."
+    tnow = time.time()
+    msg = "\n".join(
+        list(
+            map(
+                lambda x: f"Command available in {round(x+time_period-tnow)} sec.",
+                sorted(command_history[ctx.author_id]),
+            )
+        )
+    )
+    msg += f"\nYou can still send {max_calls-len(command_history[ctx.author_id])} actions to this bot."
     await ctx.send(msg, hidden=True)
 
 
@@ -419,11 +426,11 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
         cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
         cached_files.add(filename2)
     embed = elm_embed(elm, extras_list)
-    file=None
+    file = None
     if "map" in extras_list:
-        print('attachment://'+filename2.split('/')[-1])
-        embed.set_image(url='attachment://'+filename2.split('/')[-1])
-        file=File(filename2)
+        print("attachment://" + filename2.split("/")[-1])
+        embed.set_image(url="attachment://" + filename2.split("/")[-1])
+        file = File(filename2)
     await ctx.send(embed=embed, file=file)
 
 
@@ -485,8 +492,8 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
     # ? Maybe make it read `colour=` tags for some extra pop?
     # if "colour" in elm["tags"]:
-          # str_to_colour is not needed because PIL supports
-          # both hex and string coulors just like OSM.
+    # str_to_colour is not needed because PIL supports
+    # both hex and string coulors just like OSM.
     #     embed.colour = str_to_colour(elm["tags"]["colour"])
 
     #### Image ####
@@ -607,7 +614,6 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
         await ctx.send(f"Changeset `{changeset_id}` not found.", hidden=True)
         return
 
-
     files = []
     if "map" in extras_list:
         await ctx.defer()
@@ -620,26 +626,30 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
         cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
         cached_files.add(filename2)
     embed = changeset_embed(changeset, extras_list)
-    file=None
+    file = None
     if "map" in extras_list:
-        print('attachment://'+filename2.split('/')[-1])
-        embed.set_image(url='attachment://'+filename2.split('/')[-1])
-        file=File(filename2)
+        print("attachment://" + filename2.split("/")[-1])
+        embed.set_image(url="attachment://" + filename2.split("/")[-1])
+        file = File(filename2)
     await ctx.send(embed=embed, file=file)
 
 
-def get_changeset(changeset_id: str | int, discussion:bool=False) -> dict:
+def get_changeset(changeset_id: str | int, discussion: bool = False) -> dict:
     """Shorthand for `get_elm("changeset", changeset_id)`"""
     try:
         discussion_suffix = ""
         if discussion:
             discussion_suffix = "?include_discussion=true"
         changeset = get_elm("changeset", changeset_id, discussion_suffix)
-        changeset["geometry"] = [[(changeset["minlat"], changeset["minlon"]),
-                             (changeset["minlat"], changeset["maxlon"]),
-                             (changeset["maxlat"], changeset["maxlon"]),
-                             (changeset["maxlat"], changeset["minlon"]),
-                             (changeset["minlat"], changeset["minlon"])]]
+        changeset["geometry"] = [
+            [
+                (changeset["minlat"], changeset["minlon"]),
+                (changeset["minlat"], changeset["maxlon"]),
+                (changeset["maxlat"], changeset["maxlon"]),
+                (changeset["maxlat"], changeset["minlon"]),
+                (changeset["minlat"], changeset["minlon"]),
+            ]
+        ]
         return changeset
     except ValueError:
         raise ValueError(f"Changeset `{changeset_id}` not found")
@@ -709,15 +719,27 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
             )
         else:
             embed.add_field(name="Tags", value="*(no tags)*", inline=False)
-# ?include_discussion=true
+    # ?include_discussion=true
     if "discussion" in extras:
         if changeset["comments_count"] > 0:
             # Example: *- User opened on 2020-04-14 08:00*
-            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} on {x['date'][:16].replace('T',' ')}*", changeset["discussion"]))) + "\n\n"
+            embed.description += (
+                "\n\n".join(
+                    list(
+                        map(
+                            lambda x: "> "
+                            + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
+                            + f"\n*- {x['user']} on {x['date'][:16].replace('T',' ')}*",
+                            changeset["discussion"],
+                        )
+                    )
+                )
+                + "\n\n"
+            )
         else:
             embed.description += "*No comments*\n\n"
     if len(embed.description) > 1980:
-        embed.description = embed.description[:1970].strip()+'...\n\n'
+        embed.description = embed.description[:1970].strip() + "...\n\n"
     embed.description += f"[OSMCha](https://osmcha.org/changesets/{changeset['id']})"
     return embed
 
@@ -790,7 +812,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     else:
         closed = False
         embed.set_thumbnail(url=config["symbols"]["note_open"])
-    embed.timestamp = str_to_date(note["properties"]["date_created"].replace(' ', 'T')[:19]+'Z')
+    embed.timestamp = str_to_date(note["properties"]["date_created"].replace(" ", "T")[:19] + "Z")
     if "user" in note["properties"]["comments"][0]:
         creator = note["properties"]["comments"][0]["user"]
         embed.set_author(name=creator, url=note["properties"]["comments"][0]["user_url"])
@@ -824,7 +846,19 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     if "discussion" in extras:
         if note["properties"]["comments"]:
             # Example: *- User opened on 2020-04-14 08:00*
-            embed.description+='\n\n'.join(list(map(lambda x: "> " + x["text"].strip().replace('\n\n', '\n').replace("\n", "\n> ") + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*", note["properties"]["comments"]))) + "\n\n"
+            embed.description += (
+                "\n\n".join(
+                    list(
+                        map(
+                            lambda x: "> "
+                            + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
+                            + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*",
+                            note["properties"]["comments"],
+                        )
+                    )
+                )
+                + "\n\n"
+            )
         else:
             embed.description += "*No comments*\n\n"
     if creator != "*Anonymous*":
@@ -1027,7 +1061,6 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     return (xtile, max(min(n - 1, ytile), 0))
 
 
-
 async def elms_to_render(
     elem_type,
     elem_id,
@@ -1196,7 +1229,9 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     return reduced
 
 
-def get_render_queue_bounds(segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []) -> tuple[float, float, float, float]:
+def get_render_queue_bounds(
+    segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []
+) -> tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
@@ -1241,7 +1276,7 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
     # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
-    print(list(map(lambda x:round(x,4), queue_bounds)))
+    print(list(map(lambda x: round(x, 4), queue_bounds)))
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
@@ -1251,14 +1286,14 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y - 2 * tile_margin_y:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, max_zoom)
-    tile_y_min = deg2tile_float(max_lat,0, zoom)[1]
-    tile_y_max= deg2tile_float(min_lat,0, zoom)[1]
+    tile_y_min = deg2tile_float(max_lat, 0, zoom)[1]
+    tile_y_max = deg2tile_float(min_lat, 0, zoom)[1]
     print(zoom, center_lon)
-    if zoom<10:
+    if zoom < 10:
         # At low zoom levels and high latitudes, mercator's distortion must be accounted
-        center_lat = round(tile2deg(zoom, 0, (tile_y_max + tile_y_min)/2)[0], 5)
+        center_lat = round(tile2deg(zoom, 0, (tile_y_max + tile_y_min) / 2)[0], 5)
     else:
-        center_lat=(max_lat-min_lat)/2+min_lat
+        center_lat = (max_lat - min_lat) / 2 + min_lat
     print(center_lat, min_lat, max_lat)
     return (zoom, center_lat, center_lon)
 
@@ -1308,12 +1343,13 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
-    tile_offset = ((center_x+(tiles_x%2)/2) % 1, (center_y+(tiles_x%2)/2) % 1)
-    return xmin, xmax - 1, ymin, ymax -1, tile_offset
+    tile_offset = ((center_x + (tiles_x % 2) / 2) % 1, (center_y + (tiles_x % 2) / 2) % 1)
+    return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
-async def get_image_cluster(lat_deg: float, lon_deg: float,
-    zoom: int, tile_url: str = config["tile_url"]) -> tuple[File, str]:
+async def get_image_cluster(
+    lat_deg: float, lon_deg: float, zoom: int, tile_url: str = config["tile_url"]
+) -> tuple[File, str]:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
@@ -1353,7 +1389,12 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     twoPointList = [leftUpPoint, rightDownPoint]
     draw.ellipse(twoPointList, fill=colour)
 
-def wgs2pixel(xy: tuple[float | int, float | int], tile_range: tuple[int,int,int,int,tuple[float,float]], frag: tuple[int, float, float]):
+
+def wgs2pixel(
+    xy: tuple[float | int, float | int],
+    tile_range: tuple[int, int, int, int, tuple[float, float]],
+    frag: tuple[int, float, float],
+):
     """Convert geographical coordinates to X-Y coordinates to be used on map."""
     # Tile range is calculated in get_image_tile_range
     zoom, lat_deg, lon_deg = frag
@@ -1363,13 +1404,16 @@ def wgs2pixel(xy: tuple[float | int, float | int], tile_range: tuple[int,int,int
     coord = deg2tile_float(xy[0], xy[1], zoom)
     # Coord is now actual pixels, where line must be drawn on image.
     return tile2pixel(coord, zoom, tile_range)
+
+
 def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), 
-            round((xy[1] - ymin - tile_offset[1]) * tile_h))
+    coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), round((xy[1] - ymin - tile_offset[1]) * tile_h))
     return coord
+
+
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
@@ -1380,18 +1424,17 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
         # print(coord)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
-            icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2),
-                        int(coord[1] - closed_note_icon_size[1]))
+            icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2), int(coord[1] - closed_note_icon_size[1]))
         else:
             note_icon = open_note_icon
-            icon_pos = (int(coord[0] - open_note_icon_size[0] / 2),
-                        int(coord[1] - open_note_icon_size[1]))
+            icon_pos = (int(coord[0] - open_note_icon_size[0] / 2), int(coord[1] - open_note_icon_size[1]))
         # https://stackoverflow.com/questions/5324647
         # print(icon_pos)
         Cluster.paste(note_icon, icon_pos, note_icon)
         del note_icon
     Cluster.save(filename)
     return Cluster, filename
+
 
 def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]], frag: tuple[int, float, float]):
     # Inputs:   Cluster - PIL image
@@ -1415,25 +1458,25 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
         draw_line(render_queue[seg_num], draw, color)
         # Maybe nodes shouldn't be rendered, if way has many, let's say 80+ nodes,
         # because it would become too cluttered?  This is very indecisive function.
-        draw_nodes=False
+        draw_nodes = False
         if len(render_queue[seg_num]) < 80:
-            draw_nodes=True
+            draw_nodes = True
         if len(render_queue) > 40:
-            draw_nodes=False
+            draw_nodes = False
         if len(render_queue[seg_num]) == 1:
-            draw_nodes=True
+            draw_nodes = True
         if draw_nodes:
             draw_node(render_queue[seg_num][0], draw, color)
             if len(render_queue[seg_num]) > 1:
                 for node_num in range(1, len(render_queue[seg_num])):
                     draw_node(render_queue[seg_num][node_num], draw, color)
     filename = config["map_save_file"].format(t=time.time())
-    if True: 
-        draw_node((640.0,640.0), draw, "#088")
-        coord = wgs2pixel((frag[1], frag[2]),tile_range, frag)
-        print("Map alignment error: ", coord[0]-640, coord[1]-640)
+    if True:
+        draw_node((640.0, 640.0), draw, "#088")
+        coord = wgs2pixel((frag[1], frag[2]), tile_range, frag)
+        print("Map alignment error: ", coord[0] - 640, coord[1] - 640)
         draw_node(coord, draw, "#bb0")
-        print(640,640, ' ', *coord)
+        print(640, 640, " ", *coord)
     print(f"Saved drawn image as {filename}.")
     Cluster.save(filename)
     return Cluster, filename
@@ -1448,10 +1491,12 @@ async def ask_render_confirmation(msg):
     await msg.add_reaction(cancel_emoji)
 
     def check(reaction, user_obj):
-        return reaction.message == msg and \
-        	user_obj == msg.author and \
-        	(str(reaction.emoji) in {reaction_string, 
-        	image_emoji, cancel_emoji, embedded_emoji})
+        return (
+            reaction.message == msg
+            and user_obj == msg.author
+            and (str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji, embedded_emoji})
+        )
+
     try:
         reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
     except asyncio.TimeoutError:  # User didn't respond
@@ -1511,7 +1556,6 @@ async def on_message(msg: Message) -> None:
     if msg.author == client.user:
         return
 
-
     #### Try my commands, those are gone ####
     if msg.content.startswith("?josmtip"):
         await msg.channel.send("Try `/josmtip` :thinking:")
@@ -1533,8 +1577,7 @@ async def on_message(msg: Message) -> None:
         for elm in CHANGESET_INLINE_REGEX.findall(msg.clean_content)
     ]
     notes = [
-        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
-        for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1]) for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
     ]
     users = [thing.split("/")[1] for thing in USER_INLINE_REGEX.findall(msg.clean_content)]
     map_frags = MAP_FRAGMENT_INLINE_REGEX.findall(msg.clean_content)
@@ -1549,7 +1592,7 @@ async def on_message(msg: Message) -> None:
         return
 
     ask_confirmation = False
-    #for match in elms + changesets + notes:
+    # for match in elms + changesets + notes:
     #    if match[2] != "/" or len(match[1]) > 1:  # Found case when user didn't use standard node/123 format
     #        ask_confirmation = True
     if len(elms + notes + changesets) != 0:
@@ -1609,9 +1652,13 @@ async def on_message(msg: Message) -> None:
                     if add_embedded:
                         embeds.append(note_embed(note))
                     if add_image:
-                        notes_render_queue.append((note['geometry']['coordinates'][1],
-                                                   note['geometry']['coordinates'][0],
-                                                   note['properties']['status'] == 'closed'))
+                        notes_render_queue.append(
+                            (
+                                note["geometry"]["coordinates"][1],
+                                note["geometry"]["coordinates"][0],
+                                note["properties"]["status"] == "closed",
+                            )
+                        )
                 except ValueError:
                     errorlog.append((elm_type, note_id))
         time_spent = time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start)
@@ -1629,7 +1676,7 @@ async def on_message(msg: Message) -> None:
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
                 zoom = min([zoom, max_note_zoom])
-            print(zoom,lat, lon, sep="/")
+            print(zoom, lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             cached_files.add(filename)
             errorlog += errors
@@ -1644,7 +1691,9 @@ async def on_message(msg: Message) -> None:
             if notes_render_queue:
                 await status_msg.edit(content=f"Rendering notes to map.")
                 for note in notes_render_queue:
-                    cluster, filename2 = render_notes_on_cluster(cluster, notes_render_queue, (zoom, lat, lon), filename2)
+                    cluster, filename2 = render_notes_on_cluster(
+                        cluster, notes_render_queue, (zoom, lat, lon), filename2
+                    )
                 cached_files.add(filename2)
             files.append(File(filename2))
 
@@ -1848,6 +1897,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 if __name__ == "__main__":
     load_dotenv()
     import tests
+
     if os.getenv("TESTING") == "True":
         client.run(os.getenv("DISCORD_TESTING_TOKEN"))
     else:
