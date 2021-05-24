@@ -33,12 +33,6 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
-# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
-cached_files: set = set()
-# Set of unix timestamps.
-recent_googles: set = set()
-command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
-
 ### Inline linking ###
 ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
@@ -46,25 +40,31 @@ NOTE_INLINE_REGEX = rf"{SS}(note)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS
 USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
+MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
 
+# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+cached_files: set = set()
+# Set of unix timestamps.
+recent_googles: set = set()
+command_history:dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
+### Rendering ###
 max_zoom = 19
 tile_w, tile_h = 256, 256  # Tile size used for renderer
 tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
+# Used in render_elms_on_cluster. List of colours to be cycled.
+element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
+max_note_zoom = 17
 
+### Rate-limiting ###
 # These 2 are used in check_rate_limit
 time_period = 30
 max_calls = 10
-
-# Following 3 are used by on_message
+# Following 4 are used by on_message
 max_elements = 10
 element_count_exp = round(math.log(max_calls, max_elements), 2)  # 1.17
 rate_extra_exp = 1.8
 rendering_rate_exp = 0.8
-
-# Used in render_elms_on_cluster. List of colours to be cycled.
-element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
-max_note_zoom = 17
 
 reaction_string = "🔎"  # :mag_right:
 image_emoji = "🖼️"  # :frame_photo: 
@@ -79,7 +79,6 @@ HEADERS = {
     "Accept-Language": "en-GB,en",
     "Connection": "keep-alive",
 }
-
 
 
 def load_config() -> None:
@@ -101,6 +100,13 @@ config: dict[str, Any] = {}
 guild_ids: list[int] = []
 load_config()
 
+ELM_INLINE_REGEX = re.compile(ELM_INLINE_REGEX, re.IGNORECASE)
+CHANGESET_INLINE_REGEX = re.compile(CHANGESET_INLINE_REGEX, re.IGNORECASE)
+NOTE_INLINE_REGEX = re.compile(NOTE_INLINE_REGEX, re.IGNORECASE)
+USER_INLINE_REGEX = re.compile(USER_INLINE_REGEX, re.IGNORECASE)
+MAP_FRAGMENT_INLINE_REGEX = re.compile(MAP_FRAGMENT_INLINE_REGEX, re.IGNORECASE)
+INTEGER_REGEX = re.compile(POS_INT)
+
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
 res = requests.get(config["symbols"]["note_solved"], headers=HEADERS)
@@ -109,8 +115,6 @@ res = requests.get(config["symbols"]["note_open"], headers=HEADERS)
 open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
-# Cluster.paste(tile,
-
 
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
@@ -405,6 +409,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     await ctx.defer()
     files = []
     if "map" in extras_list:
+        await ctx.defer()
         render_queue = await elms_to_render(elm_type, elm_id)
         check_rate_limit(ctx.author_id, extra=len(render_queue) ** rendering_rate_exp)
         bbox = get_render_queue_bounds(render_queue)
@@ -579,7 +584,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
         ),
         create_option(
             name="extras",
-            description="Comma seperated list of extras from `info`, `tags`, `discussion`.",
+            description="Comma seperated list of extras from `info`, `tags`, `map`, `discussion`.",
             option_type=3,
             required=False,
         ),
@@ -592,7 +597,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
-        if extra != "" and extra not in ["info", "tags", "discussion"]:
+        if extra != "" and extra not in ["info", "tags", "map", "discussion"]:
             await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info` and `tags`.", hidden=True)
             return
 
@@ -602,8 +607,25 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
         await ctx.send(f"Changeset `{changeset_id}` not found.", hidden=True)
         return
 
-    await ctx.defer()
-    await ctx.send(embed=changeset_embed(changeset, extras_list))
+
+    files = []
+    if "map" in extras_list:
+        await ctx.defer()
+        render_queue = changeset["geometry"]
+        check_rate_limit(ctx.author_id)
+        bbox = get_render_queue_bounds(render_queue)
+        zoom, lat, lon = calc_preview_area(bbox)
+        cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+        cached_files.add(filename)
+        cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+        cached_files.add(filename2)
+    embed = changeset_embed(changeset, extras_list)
+    file=None
+    if "map" in extras_list:
+        print('attachment://'+filename2.split('/')[-1])
+        embed.set_image(url='attachment://'+filename2.split('/')[-1])
+        file=File(filename2)
+    await ctx.send(embed=embed, file=file)
 
 
 def get_changeset(changeset_id: str | int, discussion:bool=False) -> dict:
@@ -612,7 +634,13 @@ def get_changeset(changeset_id: str | int, discussion:bool=False) -> dict:
         discussion_suffix = ""
         if discussion:
             discussion_suffix = "?include_discussion=true"
-        return get_elm("changeset", changeset_id, discussion_suffix)
+        changeset = get_elm("changeset", changeset_id, discussion_suffix)
+        changeset["geometry"] = [[(changeset["minlat"], changeset["minlon"]),
+                             (changeset["minlat"], changeset["maxlon"]),
+                             (changeset["maxlat"], changeset["maxlon"]),
+                             (changeset["maxlat"], changeset["minlon"]),
+                             (changeset["minlat"], changeset["minlon"])]]
+        return changeset
     except ValueError:
         raise ValueError(f"Changeset `{changeset_id}` not found")
 
@@ -950,9 +978,6 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
         img_msg = await ctx.channel.send(msg, file=image_file)
 
     await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
-
-
-MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
 
 
 def frag_to_bits(URL: str) -> tuple[int, float, float]:
@@ -1501,18 +1526,18 @@ async def on_message(msg: Message) -> None:
     # elm[1] - separator used
     # elm[2] - element ID
     elms = [
-        (elm[0], tuple(re.findall("\d+", elm[2])), elm[1]) for elm in re.findall(ELM_INLINE_REGEX, msg.clean_content)
+        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1]) for elm in ELM_INLINE_REGEX.findall(msg.clean_content)
     ]
     changesets = [
-        (elm[0], tuple(re.findall("\d+", elm[2])), elm[1])
-        for elm in re.findall(CHANGESET_INLINE_REGEX, msg.clean_content)
+        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
+        for elm in CHANGESET_INLINE_REGEX.findall(msg.clean_content)
     ]
     notes = [
-        (elm[0], tuple(re.findall("\d+", elm[2])), elm[1])
-        for elm in re.findall(NOTE_INLINE_REGEX, msg.clean_content)
+        (elm[0], tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
+        for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
     ]
-    users = [thing.split("/")[1] for thing in re.findall(USER_INLINE_REGEX, msg.clean_content)]
-    map_frags = re.findall(MAP_FRAGMENT_INLINE_REGEX, msg.clean_content)
+    users = [thing.split("/")[1] for thing in USER_INLINE_REGEX.findall(msg.clean_content)]
+    map_frags = MAP_FRAGMENT_INLINE_REGEX.findall(msg.clean_content)
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id

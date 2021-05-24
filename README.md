@@ -9,11 +9,14 @@ If they are enabled, the bot can show suggestions in a specific channel.
 
 The bot also updates a member count upon someone joining/leaving the server.
 
-Embedding of elmenents, users and changesets also works by putting the following somewhere in your message in addition to using the command, using the command enabled getting extra info though if it's wanted:
+Embedding of elmenents, map fragments, notes, users and changesets also works by putting the following somewhere in your message in addition to using the command, using the command enabled getting extra info though if it's wanted:
 
 - `node/<ID>` (`way` and `relation` work too)
+- `note/<ID>`
 - `user/<username>`
 - `changeset/<ID>`
+- `map=#<Zoom>/<Lat>/<Lon>`
+
 
 ## Configuration
 

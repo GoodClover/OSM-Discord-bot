@@ -14,6 +14,7 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 
 - `info`: view extra info about the element.
 - `tags`: show the element's tags.
+- `map`: show the element on a map.
 - `members`: show the members of a relation.
 
 Note: Due to Discord API limits, listing tags and members may not be possible if there are too many.
@@ -27,6 +28,7 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 `<extras>` is a comma seperated list of:
 
 - `info`: view extra info about the element.
+- `discussion`: show the changesets's discussion.
 - `tags`: show the changesets's tags.
 
 ### View notes
