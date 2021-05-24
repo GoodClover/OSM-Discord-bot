@@ -1,31 +1,29 @@
 # /bin/python3
 from __future__ import annotations
-import asyncio
-
-from typing import Any, Iterable, Union
 
 ## IMPORTS ##
+import asyncio
+import json
+import math
 import os
 import random
-import json
 import re
-import math
-import requests
 import time
 from datetime import datetime
-from urllib.parse import quote, unquote
 from io import BytesIO
+from typing import Any, Iterable, Union
+from urllib.parse import quote
 
-from dotenv import load_dotenv
 import discord
+import overpy
+import requests
+from PIL import Image
+from PIL import ImageDraw  # For drawing elements
 from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
-from PIL import Image
-from PIL import ImageDraw  # For drawing elements
-import overpy
-
+from dotenv import load_dotenv
 
 ## SETUP ##
 # Regex
@@ -117,7 +115,6 @@ open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
-
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
 
@@ -173,6 +170,7 @@ def get_suffixed_tag(
     key: str,
     suffix: str,
 ) -> tuple[str, str] | tuple[None, None]:
+    # Looks like two style checkers tend to disagree on argument whitespacing.
     suffixed_key = key + suffix
     if suffixed_key in tags:
         return suffixed_key, tags[suffixed_key]
@@ -1364,7 +1362,7 @@ async def get_image_cluster(
     print(tile_range)
     errorlog = []
     Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
-    for xtile in range(xmin-1, xmax + 2):
+    for xtile in range(xmin - 1, xmax + 2):
         # print(xtile, xtile % n)
         xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
         # Xtile is preserved, because it's used for plotting it on map
@@ -1533,7 +1531,6 @@ async def ask_render_confirmation(msg):
 
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
     if payload.emoji.name == "🗑️":
         # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
@@ -1671,7 +1668,7 @@ async def on_message(msg: Message) -> None:
                         )
                 except ValueError:
                     errorlog.append((elm_type, note_id))
-        time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start),3)
+        time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start), 3)
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
             check_rate_limit(author_id, time_spent)
