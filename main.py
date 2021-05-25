@@ -1,31 +1,29 @@
 # /bin/python3
 from __future__ import annotations
-import asyncio
-
-from typing import Any, Iterable, Union
 
 ## IMPORTS ##
+import asyncio
+import json
+import math
 import os
 import random
-import json
 import re
-import math
-import requests
 import time
 from datetime import datetime
-from urllib.parse import quote, unquote
 from io import BytesIO
+from typing import Any, Iterable, Union
+from urllib.parse import quote
 
-from dotenv import load_dotenv
 import discord
+import overpy
+import requests
+from PIL import Image
+from PIL import ImageDraw  # For drawing elements
 from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashMessage
 from discord_slash.utils.manage_commands import create_choice, create_option
-from PIL import Image
-from PIL import ImageDraw  # For drawing elements
-import overpy
-
+from dotenv import load_dotenv
 
 ## SETUP ##
 # Regex
@@ -71,6 +69,7 @@ reaction_string = "🔎"  # :mag_right:
 image_emoji = "🖼️"  # :frame_photo:
 cancel_emoji = "❌"  # :x:
 embedded_emoji = "🛏️"  # :bed:
+delete_msg_emoji = "🗑️"  # :wastebasket:
 
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
@@ -116,7 +115,6 @@ res = requests.get(config["symbols"]["note_open"], headers=HEADERS)
 open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
-
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
@@ -173,6 +171,7 @@ def get_suffixed_tag(
     key: str,
     suffix: str,
 ) -> tuple[str, str] | tuple[None, None]:
+    # Looks like two style checkers tend to disagree on argument whitespacing.
     suffixed_key = key + suffix
     if suffixed_key in tags:
         return suffixed_key, tags[suffixed_key]
@@ -1009,7 +1008,7 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
         # This works though so eh ¯\_(ツ)_/¯
         msg = f"<{config['site_url']}#map={zoom_int}/{lat_deg}/{lon_deg}>"
 
-        img_msg = await ctx.channel.send(msg, file=image_file)
+        img_msg = await ctx.channel.send(msg, file=File(filename))
 
     await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
 
@@ -1343,7 +1342,11 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
+    print("Tile offset calculation")
+    print(center_x, tiles_x, tiles_x % 2, (tiles_x % 2) / 2, (center_x + (tiles_x % 2) / 2))
     tile_offset = ((center_x + (tiles_x % 2) / 2) % 1, (center_y + (tiles_x % 2) / 2) % 1)
+    # tile_offset = 0,0
+    print("Offset:", tile_offset)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
@@ -1357,18 +1360,22 @@ async def get_image_cluster(
     frag = zoom, lat_deg, lon_deg
     tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     xmin, xmax, ymin, ymax, tile_offset = tile_range
+    print(tile_range)
     errorlog = []
     Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
-    for xtile in range(xmin, xmax + 2):
-        xtile = xtile % n  # Repeats tiles across -180/180 meridian.
-        for ytile in range(ymin, ymax + 2):
+    for xtile in range(xmin - 1, xmax + 2):
+        # print(xtile, xtile % n)
+        xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
+        # Xtile is preserved, because it's used for plotting it on map
+        for ytile in range(ymin, min([ymax + 2, n])):
+            # print(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile))
             try:
-                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
+                res = requests.get(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), headers=HEADERS)
                 tile = Image.open(BytesIO(res.content))
                 Cluster.paste(tile, tile2pixel((xtile, ytile), zoom, tile_range))
             except Exception as e:
                 print(e)
-                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile, y=ytile)))
+                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)))
     filename = config["map_save_file"].format(t=time.time())
     Cluster.save(filename)
     return Cluster, filename, errorlog
@@ -1408,6 +1415,7 @@ def wgs2pixel(
 
 def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
+    # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
     coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), round((xy[1] - ymin - tile_offset[1]) * tile_h))
@@ -1524,14 +1532,11 @@ async def ask_render_confirmation(msg):
 
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name == "🗑️":
+    if payload.emoji.name == delete_msg_emoji:
         # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
         msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
-
         if msg.author == client.user:  # Ensure message was created by the bot
-
             # Powerful users can delete anything
             if is_powerful(payload.member, client.get_guild(payload.guild_id)):
                 await msg.delete()
@@ -1603,16 +1608,15 @@ async def on_message(msg: Message) -> None:
     wait_for_user_start = time.time()
     if ask_confirmation:
         add_image, add_embedded = await ask_render_confirmation(msg)
+        print(add_image)
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
-
     # User quota is checked after they confirmed element lookup.
     for i in range(int(queried_elements_count ** element_count_exp) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
         rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
         # if not rating:
         #     return
-    print(add_image)
     async with msg.channel.typing():
         # Create the messages
         status_msg = await msg.channel.send("This is status message, that will show progress of your request.")
@@ -1663,7 +1667,7 @@ async def on_message(msg: Message) -> None:
                         )
                 except ValueError:
                     errorlog.append((elm_type, note_id))
-        time_spent = time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start)
+        time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start), 3)
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
             check_rate_limit(author_id, time_spent)
@@ -1735,7 +1739,7 @@ async def on_message(msg: Message) -> None:
             if len(errorlog) > 5:
                 await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
 
-        time_spent = time.time() - msg_arrived
+        time_spent = round(time.time() - msg_arrived, 3)
         # msg_arrived actually means time since start of rendering
         if time_spent > 10:
             # Most direct way to assess difficulty of user's request.
