@@ -1,7 +1,6 @@
 # /bin/python3
 from __future__ import annotations
 
-## IMPORTS ##
 import asyncio
 import json
 import math
@@ -11,19 +10,30 @@ import re
 import time
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Iterable, Union
+from typing import Any
+from typing import Iterable
+from typing import Union
 from urllib.parse import quote
 
 import discord
 import overpy
 import requests
+from discord import AllowedMentions
+from discord import Client
+from discord import Embed
+from discord import File
+from discord import Guild
+from discord import Intents
+from discord import Member
+from discord import Message
+from discord_slash import SlashCommand
+from discord_slash import SlashContext
+from discord_slash.model import SlashMessage
+from discord_slash.utils.manage_commands import create_choice
+from discord_slash.utils.manage_commands import create_option
+from dotenv import load_dotenv
 from PIL import Image
 from PIL import ImageDraw  # For drawing elements
-from discord import Message, Client, Embed, AllowedMentions, File, Member, Intents, Guild
-from discord_slash import SlashCommand, SlashContext
-from discord_slash.model import SlashMessage
-from discord_slash.utils.manage_commands import create_choice, create_option
-from dotenv import load_dotenv
 
 ## SETUP ##
 # Regex

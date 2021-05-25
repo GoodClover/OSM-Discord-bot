@@ -35,7 +35,7 @@ Gives basic info such as the name and links to a bunch of sites where you can se
 ### View notes
 `/note <ID>`
 
-View info about an OSM note. 
+View info about an OSM note.
 Gives basic info such as the it's text.
 
 `<extras>` is a comma seperated list of:
@@ -55,11 +55,11 @@ Gives basic info such as the name and links to a few sites where you can see mor
 
 ### Inline commands
 
-Querying any of the previous items or map sections is also possible via inline commands. 
-Just mention any of them in normal message and bot will wake up. 
+Querying any of the previous items or map sections is also possible via inline commands.
+Just mention any of them in normal message and bot will wake up.
 There are multiple ways to trigger inline commands.
 
-- Paste ending of an OSM web link (`node/1`). 
+- Paste ending of an OSM web link (`node/1`).
 - Mention element casually in the text such as:
   - node 1
   - ways 1 and 2
@@ -123,4 +123,3 @@ Normally, no slash command have more than 30 sec cooldown. However, since inline
 - If querying elements from Overpass took more than 15 seconds, single cooldown linearly correlated to time spent is applied
 - If element rendering is enabled, single cooldown related to amount of way segments is added.
 - If processing outputs (render images and sending mesages) took more than 10 seconds, single cooldown linearly correlated to time spent is applied.
-
