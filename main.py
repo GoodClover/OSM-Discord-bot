@@ -75,12 +75,6 @@ element_count_exp = round(math.log(max_calls, max_elements), 2)  # 1.17
 rate_extra_exp = 1.8
 rendering_rate_exp = 0.8
 
-reaction_string = "🔎"  # :mag_right:
-image_emoji = "🖼️"  # :frame_photo:
-cancel_emoji = "❌"  # :x:
-embedded_emoji = "🛏️"  # :bed:
-delete_msg_emoji = "🗑️"  # :wastebasket:
-
 HEADERS = {
     "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
     "Accept": "image/png",
@@ -125,6 +119,13 @@ res = requests.get(config["symbols"]["note_open"], headers=HEADERS)
 open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
+
+REACTION_STRING = "🔎"  # :mag_right:
+IMAGE_EMOJI = "🖼️"  # :frame_photo:
+EMBEDDED_EMOJI = "🛏️"  # :bed:
+CANCEL_EMOJI = "❌"  # :x:
+DELETE_MSG_EMOJI = "🗑️"  # :wastebasket:
+LOADING_EMOJI = config["emoji"]["loading"]  # :loading:
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
@@ -1105,7 +1106,9 @@ async def elms_to_render(
         output_type = "skel geom"  # Original version
     Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out " + output_type + ";"
     if status_msg:
-        await status_msg.edit(content="Querying `" + Q + "`")  # I hope this works. uncomment on live instance
+        await status_msg.edit(
+            content=f"{LOADING_EMOJI} Querying `" + Q + "`"
+        )  # I hope this works. uncomment on live instance
     # Above line may introduce error when running it from /element, not on_message.
     try:
         result = overpass_api.query(Q)
@@ -1118,7 +1121,7 @@ async def elms_to_render(
             Q = Q.replace("bb;", "skel center;")
             get_center = True
             if status_msg:
-                await status_msg.edit("Querying `" + Q + "`")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Querying `" + Q + "`")
             result = overpass_api.query(Q)
     # return result
     # Since we are querying for single element, top level result will have just 1 element.
@@ -1503,16 +1506,16 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
 async def ask_render_confirmation(msg):
     # Ask user confirmation by reacting with 4 emojis
-    await msg.add_reaction(reaction_string)
-    await msg.add_reaction(image_emoji)
-    await msg.add_reaction(embedded_emoji)
-    await msg.add_reaction(cancel_emoji)
+    await msg.add_reaction(REACTION_STRING)
+    await msg.add_reaction(IMAGE_EMOJI)
+    await msg.add_reaction(EMBEDDED_EMOJI)
+    await msg.add_reaction(CANCEL_EMOJI)
 
     def check(reaction, user_obj):
         return (
             reaction.message == msg
             and user_obj == msg.author
-            and (str(reaction.emoji) in {reaction_string, image_emoji, cancel_emoji, embedded_emoji})
+            and (str(reaction.emoji) in {REACTION_STRING, IMAGE_EMOJI, CANCEL_EMOJI, EMBEDDED_EMOJI})
         )
 
     try:
@@ -1521,29 +1524,29 @@ async def ask_render_confirmation(msg):
         add_image = False
         add_embedded = False
     else:  # User responded
-        if str(reaction.emoji) == image_emoji:
+        if str(reaction.emoji) == IMAGE_EMOJI:
             add_image = True
             add_embedded = False
-        elif str(reaction.emoji) == embedded_emoji:
+        elif str(reaction.emoji) == EMBEDDED_EMOJI:
             add_image = False
             add_embedded = True
-        elif str(reaction.emoji) == cancel_emoji:
+        elif str(reaction.emoji) == CANCEL_EMOJI:
             add_image = False
             add_embedded = False
         else:
             add_embedded = True
             add_image = True
-    await msg.clear_reaction(reaction_string)
-    await msg.clear_reaction(image_emoji)
-    await msg.clear_reaction(embedded_emoji)
-    await msg.clear_reaction(cancel_emoji)
+    await msg.clear_reaction(REACTION_STRING)
+    await msg.clear_reaction(IMAGE_EMOJI)
+    await msg.clear_reaction(EMBEDDED_EMOJI)
+    await msg.clear_reaction(CANCEL_EMOJI)
     return add_image, add_embedded
 
 
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name == delete_msg_emoji:
+    if payload.emoji.name == DELETE_MSG_EMOJI:
         # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
         msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
         if msg.author == client.user:  # Ensure message was created by the bot
@@ -1629,14 +1632,16 @@ async def on_message(msg: Message) -> None:
         #     return
     async with msg.channel.typing():
         # Create the messages
-        status_msg = await msg.channel.send("This is status message, that will show progress of your request.")
+        status_msg = await msg.channel.send(
+            f"{LOADING_EMOJI} This is status message, that will show progress of your request."
+        )
         embeds: list[Embed] = []
         files: list[File] = []
         errorlog = []
 
         for elm_type, elm_ids, separator in elms:
             for elm_id in elm_ids:
-                await status_msg.edit(content=f"Processing {elm_type}/{elm_id}.")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{elm_id}.")
                 try:
                     if add_embedded:
                         embeds.append(elm_embed(get_elm(elm_type, elm_id)))
@@ -1648,7 +1653,7 @@ async def on_message(msg: Message) -> None:
         for elm_type, changeset_ids, separator in changesets:
             # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
             for changeset_id in changeset_ids:
-                await status_msg.edit(content=f"Processing {elm_type}/{changeset_id}.")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{changeset_id}.")
                 try:
                     changeset = get_changeset(changeset_id)
                     if add_embedded:
@@ -1662,7 +1667,7 @@ async def on_message(msg: Message) -> None:
         for elm_type, note_ids, separator in notes:
             # note_ids = (<tuple: list of notes>, <str: separator used>)
             for note_id in note_ids:
-                await status_msg.edit(content=f"Processing {elm_type}/{note_id}.")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{note_id}.")
                 try:
                     note = get_note(note_id)
                     if add_embedded:
@@ -1687,7 +1692,7 @@ async def on_message(msg: Message) -> None:
             # Add extra to quota for querying large relations
             check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** rendering_rate_exp)
             # Next step is to calculate map area for render.
-            await status_msg.edit(content=f"Downloading map tiles")
+            await status_msg.edit(content=f"{LOADING_EMOJI} Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
@@ -1699,13 +1704,13 @@ async def on_message(msg: Message) -> None:
 
             # Start drawing elements on image.
             if render_queue:
-                await status_msg.edit(content=f"Rendering elements to map.")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Rendering elements to map.")
                 cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
                 cached_files.add(filename2)
             else:
                 filename2 = filename
             if notes_render_queue:
-                await status_msg.edit(content=f"Rendering notes to map.")
+                await status_msg.edit(content=f"{LOADING_EMOJI} Rendering notes to map.")
                 for note in notes_render_queue:
                     cluster, filename2 = render_notes_on_cluster(
                         cluster, notes_render_queue, (zoom, lat, lon), filename2
@@ -1714,20 +1719,20 @@ async def on_message(msg: Message) -> None:
             files.append(File(filename2))
 
         for username in users:
-            await status_msg.edit(content=f"Processing user/{username}.")
+            await status_msg.edit(content=f"{LOADING_EMOJI} Processing user/{username}.")
             try:
                 embeds.append(user_embed(get_user(get_id_from_username(username))))
             except ValueError:
                 errorlog.append(("user", username))
 
         for map_frag in map_frags:
-            await status_msg.edit(content=f"Processing {map_frag}.")
+            await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")
             zoom, lat, lon = frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             files.append(File(filename))
             cached_files.add(filename)
-        await status_msg.edit(content=f"Starting upload")
+        await status_msg.edit(content=f"{LOADING_EMOJI} Starting upload")
         # Send the messages
         if len(embeds) > 0:
             await msg.channel.send(embed=embeds[0], reference=msg)
