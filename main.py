@@ -231,9 +231,9 @@ async def googlebad_command(ctx: SlashContext) -> None:
     if len(recent_googles) > 4 and random.random() > 0.7:
         # Alternative output is triggered at 30% chance after 5 /googlebads are used in 1 minute.
         recent_googles = set()
-        await ctx.send(random.choice(ohnos).replace("...", "Whenever you use `/googlebad`,"))
+        await ctx.send(random.choice(ohnos).replace("…", "Whenever you use `/googlebad`,"))
     else:
-        await ctx.send(random.choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
+        await ctx.send(random.choice(ohnos).replace("…", "Whenever you mention Google Maps,"))
 
 
 # JOSM Tip
@@ -749,7 +749,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         else:
             embed.description += "*No comments*\n\n"
     if len(embed.description) > 1980:
-        embed.description = embed.description[:1970].strip() + "...\n\n"
+        embed.description = embed.description[:1970].strip() + "…\n\n"
     embed.description += f"[OSMCha](https://osmcha.org/changesets/{changeset['id']})"
     return embed
 
