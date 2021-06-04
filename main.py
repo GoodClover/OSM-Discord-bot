@@ -1750,7 +1750,10 @@ async def on_message(msg: Message) -> None:
 
         if len(errorlog) > 0:
             for element_type, element_id in errorlog[:5]:
-                await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+                errmsg = f"Error occurred while processing {element_type}/{element_id}."
+                if element_type == "user":
+                    errmsg += "\nEither the user dosen't exist, or is too new to be detected by the bot."
+                await msg.channel.send(errmsg)
             if len(errorlog) > 5:
                 await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
 
