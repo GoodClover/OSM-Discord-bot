@@ -1546,13 +1546,18 @@ async def ask_render_confirmation(msg):
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name == DELETE_MSG_EMOJI:
-        # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
-        msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        if msg.author == client.user:  # Ensure message was created by the bot
-            # Powerful users can delete anything
-            if is_powerful(payload.member, client.get_guild(payload.guild_id)):
-                await msg.delete()
+    if payload.emoji.name != DELETE_MSG_EMOJI:
+        return
+    if payload.channel_id == config['server_settings'][str(payload.guild_id)]['suggestion_channel']:
+        # Don't allow deleting suggestions
+        return
+    # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
+    msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
+    if msg.author == client.user:  # Ensure message was created by the bot
+        # Powerful users can delete anything
+        if is_powerful(payload.member, client.get_guild(payload.guild_id)):
+            print(f"{payload.user_id} deleted following message:\n```{msg.content}```")
+            await msg.delete()
 
             # msg.reference.fail_if_not_exists dosen't appear to work correctly.
             # // if msg.reference and not msg.reference.fail_if_not_exists:  # If is a reply & refernced message still exists
