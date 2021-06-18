@@ -446,10 +446,15 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
 
 def get_elm(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
+    code = res.status_code
+    if code == 410:
+        raise ValueError(f"`{elm_type.capitalize()}` `{elm_id}` has been deleted.")
+    elif code == 404:
+        raise ValueError(f"`{elm_type.capitalize()}` `{elm_id}` has never existed.")
     try:
         elm = res.json()["elements"][0]
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"Element `{elm_type}` `{elm_id}` not found")
+        raise ValueError(f"{elm_type.capitalize()}` `{elm_id}` not found")
 
     return elm
 
@@ -920,12 +925,34 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
     await ctx.send(embed=user_embed(user, extras_list))
 
 
-def get_id_from_username(username: str) -> int:
+def get_id_from_username_old(username: str) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
     if len(whosthat) > 0:
         return whosthat[0]["id"]
     else:
         raise ValueError(f"User `{username}` not found")
+        
+def get_id_from_username(username: str) -> int:
+    whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
+    if len(whosthat) > 0:
+        return whosthat[0]["id"]
+    # Backup solution via changesets
+    res = requests.get(config["api_url"] + f"api/0.6/changesets/?display_name={username}").text
+    if res == "Object not found":
+        raise ValueError(f"User `{username}` does not exist.")
+    if "uid=" in res:
+        # +5 and -2 are used to isolate uid from `uid="123" `.
+        return res[res.find("uid=\"") + 5:res.find("user=\"") - 2]
+    # Backup of a backup by using notes lookup.
+    res = requests.get(config["api_url"] + f"api/0.6/notes/search.json/?display_name={username}").json()
+    for feat in res["features"]:
+        for comm in feat["properties"]["comments"]:
+            try:
+                if comm["user"] == username:
+                    return str(comm["uid"])
+            except KeyError:
+                pass  # Encountered anonymous note
+    raise ValueError(f"User `{username}` does exist, but has no changesets nor notes.")
 
 
 def get_user(user_id: str | int) -> dict:
