@@ -231,9 +231,9 @@ async def googlebad_command(ctx: SlashContext) -> None:
     if len(recent_googles) > 4 and random.random() > 0.7:
         # Alternative output is triggered at 30% chance after 5 /googlebads are used in 1 minute.
         recent_googles = set()
-        await ctx.send(random.choice(ohnos).replace("...", "Whenever you use `/googlebad`,"))
+        await ctx.send(random.choice(ohnos).replace("…", "Whenever you use `/googlebad`,"))
     else:
-        await ctx.send(random.choice(ohnos).replace("...", "Whenever you mention Google Maps,"))
+        await ctx.send(random.choice(ohnos).replace("…", "Whenever you mention Google Maps,"))
 
 
 # JOSM Tip
@@ -754,7 +754,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         else:
             embed.description += "*No comments*\n\n"
     if len(embed.description) > 1980:
-        embed.description = embed.description[:1970].strip() + "...\n\n"
+        embed.description = embed.description[:1970].strip() + "…\n\n"
     embed.description += f"[OSMCha](https://osmcha.org/changesets/{changeset['id']})"
     return embed
 
@@ -1782,7 +1782,10 @@ async def on_message(msg: Message) -> None:
 
         if len(errorlog) > 0:
             for element_type, element_id in errorlog[:5]:
-                await msg.channel.send(f"Error occurred while processing {element_type}/{element_id}.")
+                errmsg = f"Error occurred while processing {element_type}/{element_id}."
+                if element_type == "user":
+                    errmsg += "\nEither the user dosen't exist, or is too new to be detected by the bot."
+                await msg.channel.send(errmsg)
             if len(errorlog) > 5:
                 await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
 
