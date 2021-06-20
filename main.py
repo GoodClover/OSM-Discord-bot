@@ -941,7 +941,7 @@ def get_id_from_username(username: str) -> int:
         raise ValueError(f"User `{username}` does not exist.")
     if "uid=" in res:
         # +5 and -2 are used to isolate uid from `uid="123" `.
-        return res[res.find("uid=\"") + 5:res.find("user=\"") - 2]
+        return res[res.find('uid="') + 5:res.find('user="') - 2]
     # Backup of a backup by using notes lookup.
     res = requests.get(config["api_url"] + f"api/0.6/notes/search.json/?display_name={username}").json()
     for feat in res["features"]:
