@@ -454,7 +454,7 @@ def get_elm(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
     try:
         elm = res.json()["elements"][0]
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"{elm_type.capitalize()}` `{elm_id}` was not found.")
+        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` was not found.")
     return elm
 
 
