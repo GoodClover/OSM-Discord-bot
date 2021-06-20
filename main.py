@@ -421,8 +421,8 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
 
     try:
         elm = get_elm(elm_type, elm_id)
-    except ValueError:
-        await ctx.send(f"{elm_type.capitalize()} `{elm_id}` not found.", hidden=True)
+    except ValueError as error_message:
+        await ctx.send(error_message, hidden=True)
         return
     files = []
     if "map" in extras_list:
@@ -446,11 +446,15 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
 
 def get_elm(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
+    code = res.status_code
+    if code == 410:
+        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` has been deleted.")
+    elif code == 404:
+        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` has never existed.")
     try:
         elm = res.json()["elements"][0]
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"Element `{elm_type}` `{elm_id}` not found")
-
+        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` was not found.")
     return elm
 
 
@@ -620,8 +624,8 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
 
     try:
         changeset = get_changeset(changeset_id, "discussion" in extras)
-    except ValueError:
-        await ctx.send(f"Changeset `{changeset_id}` not found.", hidden=True)
+    except ValueError as error_message:
+        await ctx.send(error_message, hidden=True)
         return
 
     files = []
@@ -661,8 +665,8 @@ def get_changeset(changeset_id: str | int, discussion: bool = False) -> dict:
             ]
         ]
         return changeset
-    except ValueError:
-        raise ValueError(f"Changeset `{changeset_id}` not found")
+    except ValueError as error_message:
+        raise ValueError(error_message)
 
 
 def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
@@ -788,8 +792,8 @@ async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> Non
 
     try:
         note = get_note(note_id)
-    except ValueError:
-        await ctx.send(f"Note `{note_id}` not found.", hidden=True)
+    except ValueError as error_message:
+        await ctx.send(error_message, hidden=True)
         return
 
     await ctx.defer()
@@ -802,7 +806,7 @@ def get_note(note_id: str | int) -> dict:
     try:
         elm = res.json()
     except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"Note `{note_id}` not found")
+        raise ValueError(f"Note `{note_id}` does not exist.")
     return elm
 
 
@@ -912,20 +916,42 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
         # In cases where the account was only removed recently, get_user will error.
         user_id = get_id_from_username(username)
         user = get_user(user_id)
-    except ValueError:
-        await ctx.send(f"User `{username}` not found.", hidden=True)
+    except ValueError as error_message:
+        await ctx.send(error_message, hidden=True)
         return
 
     await ctx.defer()
     await ctx.send(embed=user_embed(user, extras_list))
 
 
-def get_id_from_username(username: str) -> int:
+def get_id_from_username_old(username: str) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
     if len(whosthat) > 0:
         return whosthat[0]["id"]
     else:
         raise ValueError(f"User `{username}` not found")
+        
+def get_id_from_username(username: str) -> int:
+    whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
+    if len(whosthat) > 0:
+        return whosthat[0]["id"]
+    # Backup solution via changesets
+    res = requests.get(config["api_url"] + f"api/0.6/changesets/?display_name={username}").text
+    if res == "Object not found":
+        raise ValueError(f"User `{username}` does not exist.")
+    if "uid=" in res:
+        # +5 and -2 are used to isolate uid from `uid="123" `.
+        return res[res.find('uid="') + 5:res.find('user="') - 2]
+    # Backup of a backup by using notes lookup.
+    res = requests.get(config["api_url"] + f"api/0.6/notes/search.json/?display_name={username}").json()
+    for feat in res["features"]:
+        for comm in feat["properties"]["comments"]:
+            try:
+                if comm["user"] == username:
+                    return str(comm["uid"])
+            except KeyError:
+                pass  # Encountered anonymous note
+    raise ValueError(f"User `{username}` does exist, but has no changesets nor notes.")
 
 
 def get_user(user_id: str | int) -> dict:
@@ -1388,7 +1414,7 @@ async def get_image_cluster(
                 Cluster.paste(tile, tile2pixel((xtile, ytile), zoom, tile_range))
             except Exception as e:
                 print(e)
-                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)))
+                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), e))
     filename = config["map_save_file"].format(t=time.time())
     Cluster.save(filename)
     return Cluster, filename, errorlog
@@ -1546,13 +1572,18 @@ async def ask_render_confirmation(msg):
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name == DELETE_MSG_EMOJI:
-        # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
-        msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        if msg.author == client.user:  # Ensure message was created by the bot
-            # Powerful users can delete anything
-            if is_powerful(payload.member, client.get_guild(payload.guild_id)):
-                await msg.delete()
+    if payload.emoji.name != DELETE_MSG_EMOJI:
+        return
+    if payload.channel_id == config['server_settings'][str(payload.guild_id)]['suggestion_channel']:
+        # Don't allow deleting suggestions
+        return
+    # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
+    msg = await client.get_channel(payload.channel_id).fetch_message(payload.message_id)
+    if msg.author == client.user:  # Ensure message was created by the bot
+        # Powerful users can delete anything
+        if is_powerful(payload.member, client.get_guild(payload.guild_id)):
+            print(f"{payload.user_id} deleted following message:\n```{msg.content}```")
+            await msg.delete()
 
             # msg.reference.fail_if_not_exists dosen't appear to work correctly.
             # // if msg.reference and not msg.reference.fail_if_not_exists:  # If is a reply & refernced message still exists
@@ -1647,8 +1678,8 @@ async def on_message(msg: Message) -> None:
                         embeds.append(elm_embed(get_elm(elm_type, elm_id)))
                     if add_image:
                         render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
-                except ValueError:
-                    errorlog.append((elm_type, elm_id))
+                except ValueError as error_message:
+                    errorlog.append((elm_type, elm_id, error_message))
 
         for elm_type, changeset_ids, separator in changesets:
             # changeset_ids = (<tuple: list of changesets>, <str: separator used>)
@@ -1660,8 +1691,8 @@ async def on_message(msg: Message) -> None:
                         embeds.append(changeset_embed(changeset))
                     if add_image:
                         render_queue += changeset["geometry"]
-                except ValueError:
-                    errorlog.append((elm_type, changeset_id))
+                except ValueError as error_message:
+                    errorlog.append((elm_type, changeset_id, error_message))
 
         notes_render_queue = []
         for elm_type, note_ids, separator in notes:
@@ -1680,8 +1711,8 @@ async def on_message(msg: Message) -> None:
                                 note["properties"]["status"] == "closed",
                             )
                         )
-                except ValueError:
-                    errorlog.append((elm_type, note_id))
+                except ValueError as error_message:
+                    errorlog.append((elm_type, note_id, error_message))
         time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start), 3)
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
@@ -1722,8 +1753,8 @@ async def on_message(msg: Message) -> None:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing user/{username}.")
             try:
                 embeds.append(user_embed(get_user(get_id_from_username(username))))
-            except ValueError:
-                errorlog.append(("user", username))
+            except ValueError as error_message:
+                errorlog.append(("user", username, error_message))
 
         for map_frag in map_frags:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")
@@ -1749,10 +1780,10 @@ async def on_message(msg: Message) -> None:
         await status_msg.delete()
 
         if len(errorlog) > 0:
-            for element_type, element_id in errorlog[:5]:
-                errmsg = f"Error occurred while processing {element_type}/{element_id}."
-                if element_type == "user":
-                    errmsg += "\nEither the user dosen't exist, or is too new to be detected by the bot."
+            for element_type, element_id, error_message in errorlog[:5]:
+                errmsg = f"Error occurred while processing {element_type}/{element_id}.\n{error_message}".strip()
+                # if element_type == "user":
+                #     errmsg += "\nEither the user dosen't exist, or is too new to be detected by the bot."
                 await msg.channel.send(errmsg)
             if len(errorlog) > 5:
                 await msg.channel.send(f"{len(errorlog) - 5} more errors occurred.")
