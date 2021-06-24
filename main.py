@@ -1966,7 +1966,7 @@ with open("HELP.md", "r") as file:
 help_action_row = manage_components.create_actionrow(
     manage_components.create_button(style=ButtonStyle.gray, label=LEFT_SYMBOL, custom_id="help_left"),
     manage_components.create_button(style=ButtonStyle.gray, label=RIGHT_SYMBOL, custom_id="help_right"),
-    manage_components.create_button(style=ButtonStyle.red, label=CANCEL_SYMBOL, custom_id="help_close"),
+    manage_components.create_button(style=ButtonStyle.red, label=CANCEL_SYMBOL, custom_id="delete"),
     manage_components.create_button(
         style=ButtonStyle.URL,
         # emoji=manage_components.emoji_to_dict(config["emoji"]["github"]), # FIXME: This errors for some reason.
@@ -2000,7 +2000,7 @@ async def help(ctx: SlashContext) -> None:
         else:
             if btn_ctx.author != ctx.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
                 await btn_ctx.send("Only the person that ran `/help`, or helpers, can control the menu.", hidden=True)
-            if btn_ctx.custom_id == "help_close":
+            if btn_ctx.custom_id == "delete":
                 await btn_ctx.origin_message.delete()
                 break
             elif btn_ctx.custom_id == "help_left":
@@ -2020,6 +2020,20 @@ async def help(ctx: SlashContext) -> None:
 
 
 # endregion HELP
+
+
+# When someone clicks a button with custom_id="delete"
+@slash.component_callback()
+async def delete(btn_ctx: ComponentContext):
+    #// (btn_ctx.author != btn_ctx.origin_message.author)
+    # AFAIKT there's currently no way to tell who authored the slash command,
+    # so this will have to be powerful-only. Deletion by the command invoker is
+    # handled inside the slash command, but that will break after re-boot.
+    # This will always work, even after re-boots.
+    if not is_powerful(btn_ctx.author, btn_ctx.guild):
+        await btn_ctx.send("Only the person that called the command or helpers can delete it.", hidden=True)
+        return
+    await btn_ctx.origin_message.delete()
 
 
 ## MAIN ##
