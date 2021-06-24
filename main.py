@@ -930,7 +930,8 @@ def get_id_from_username_old(username: str) -> int:
         return whosthat[0]["id"]
     else:
         raise ValueError(f"User `{username}` not found")
-        
+
+
 def get_id_from_username(username: str) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
     if len(whosthat) > 0:
@@ -941,7 +942,7 @@ def get_id_from_username(username: str) -> int:
         raise ValueError(f"User `{username}` does not exist.")
     if "uid=" in res:
         # +5 and -2 are used to isolate uid from `uid="123" `.
-        return res[res.find('uid="') + 5:res.find('user="') - 2]
+        return res[res.find('uid="') + 5 : res.find('user="') - 2]
     # Backup of a backup by using notes lookup.
     res = requests.get(config["api_url"] + f"api/0.6/notes/search.json/?display_name={username}").json()
     for feat in res["features"]:
@@ -1574,7 +1575,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
     if payload.emoji.name != DELETE_MSG_EMOJI:
         return
-    if payload.channel_id == config['server_settings'][str(payload.guild_id)]['suggestion_channel']:
+    if payload.channel_id == config["server_settings"][str(payload.guild_id)]["suggestion_channel"]:
         # Don't allow deleting suggestions
         return
     # Fetch message is rather slow operation, that's why it only takes place if user reacts with wastebasket
