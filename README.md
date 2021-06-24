@@ -1,10 +1,13 @@
 # OSM Discord Bot
 
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/GoodClover/OSM-Discord-bot/main.svg)](https://results.pre-commit.ci/latest/github/GoodClover/OSM-Discord-bot/main)
+[![merge-chance-badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fmerge-chance.info%2Fbadge%3Frepo%3Dgoodclover/OSM-Discord-bot)](https://merge-chance.info/target?repo=goodclover/OSM-Discord-bot)
+
+![The bot in action, showing an embed for node 1](res/img/example_node_embed.png)
 
 ## Features
 
-For a full list of commands see [COMMANDS.md](COMMANDS.md).
+For a full list of commands see [COMMANDS.md](COMMANDS.md), running `/help` will give you an interactive help system.
 These are slash commands, so Discord will also tell you what the commands do and how to use them.
 
 If they are enabled, the bot can show suggestions in a specific channel.
