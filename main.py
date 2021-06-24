@@ -28,7 +28,10 @@ from discord import Member
 from discord import Message
 from discord_slash import SlashCommand
 from discord_slash import SlashContext
+from discord_slash.context import ComponentContext
+from discord_slash.model import ButtonStyle
 from discord_slash.model import SlashMessage
+from discord_slash.utils import manage_components
 from discord_slash.utils.manage_commands import create_choice
 from discord_slash.utils.manage_commands import create_option
 from dotenv import load_dotenv
@@ -120,12 +123,15 @@ open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
-REACTION_STRING = "🔎"  # :mag_right:
+INSPECT_EMOJI = "🔎"  # :mag_right:
 IMAGE_EMOJI = "🖼️"  # :frame_photo:
 EMBEDDED_EMOJI = "🛏️"  # :bed:
 CANCEL_EMOJI = "❌"  # :x:
-DELETE_MSG_EMOJI = "🗑️"  # :wastebasket:
+DELETE_EMOJI = "🗑️"  # :wastebasket:
 LOADING_EMOJI = config["emoji"]["loading"]  # :loading:
+LEFT_SYMBOL = "←"
+RIGHT_SYMBOL = "→"
+CANCEL_SYMBOL = "✘"
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
@@ -1533,7 +1539,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
 
 async def ask_render_confirmation(msg):
     # Ask user confirmation by reacting with 4 emojis
-    await msg.add_reaction(REACTION_STRING)
+    await msg.add_reaction(INSPECT_EMOJI)
     await msg.add_reaction(IMAGE_EMOJI)
     await msg.add_reaction(EMBEDDED_EMOJI)
     await msg.add_reaction(CANCEL_EMOJI)
@@ -1542,7 +1548,7 @@ async def ask_render_confirmation(msg):
         return (
             reaction.message == msg
             and user_obj == msg.author
-            and (str(reaction.emoji) in {REACTION_STRING, IMAGE_EMOJI, CANCEL_EMOJI, EMBEDDED_EMOJI})
+            and (str(reaction.emoji) in {INSPECT_EMOJI, IMAGE_EMOJI, CANCEL_EMOJI, EMBEDDED_EMOJI})
         )
 
     try:
@@ -1563,7 +1569,7 @@ async def ask_render_confirmation(msg):
         else:
             add_embedded = True
             add_image = True
-    await msg.clear_reaction(REACTION_STRING)
+    await msg.clear_reaction(INSPECT_EMOJI)
     await msg.clear_reaction(IMAGE_EMOJI)
     await msg.clear_reaction(EMBEDDED_EMOJI)
     await msg.clear_reaction(CANCEL_EMOJI)
@@ -1573,7 +1579,7 @@ async def ask_render_confirmation(msg):
 @client.event  # type: ignore
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     # Allows you to delete a message by reacting with 🗑️ if it's a reply to you.
-    if payload.emoji.name != DELETE_MSG_EMOJI:
+    if payload.emoji.name != DELETE_EMOJI:
         return
     if payload.channel_id == config["server_settings"][str(payload.guild_id)]["suggestion_channel"]:
         # Don't allow deleting suggestions
@@ -1946,6 +1952,74 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
         f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the result.\n{msg_to_link(msg)}",
         hidden=True,
     )
+
+
+# region HELP
+with open("HELP.md", "r") as file:
+    help_pages = file.read().split("\n# ")
+    for i in range(len(help_pages)):  # Underline the title of all pages.
+        title, body = help_pages[i].split("\n", 1)
+        if i == 0:  # As split() dosen't remove it for the first one.
+            title = title.removeprefix("# ")
+        help_pages[i] = f"__**{title}**__\n" + body
+
+help_action_row = manage_components.create_actionrow(
+    manage_components.create_button(style=ButtonStyle.gray, label=LEFT_SYMBOL, custom_id="help_left"),
+    manage_components.create_button(style=ButtonStyle.gray, label=RIGHT_SYMBOL, custom_id="help_right"),
+    manage_components.create_button(style=ButtonStyle.red, label=CANCEL_SYMBOL, custom_id="help_close"),
+    manage_components.create_button(
+        style=ButtonStyle.URL,
+        # emoji=manage_components.emoji_to_dict(config["emoji"]["github"]), # FIXME: This errors for some reason.
+        label="View online",
+        url="https://github.com/GoodClover/OSM-Discord-bot/blob/main/HELP.md",
+    ),
+)
+
+
+@slash.slash(
+    name="help",
+    description="View help for the OSM Discord bot.",
+    guild_ids=guild_ids,
+)  # type: ignore
+async def help(ctx: SlashContext) -> None:
+    await ctx.defer(hidden=False)
+
+    current_page = 0
+
+    actions = help_action_row.copy()
+    actions["components"][0]["disabled"] = True
+    msg = await ctx.send(help_pages[0], components=[actions])
+
+    while True:
+        try:
+            btn_ctx: ComponentContext = await manage_components.wait_for_component(
+                client, messages=msg, components=help_action_row
+            )
+        except asyncio.TimeoutError:  # User didn't respond
+            await msg.delete()
+        else:
+            if btn_ctx.author != ctx.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
+                await btn_ctx.send("Only the person that ran `/help`, or helpers, can control the menu.", hidden=True)
+            if btn_ctx.custom_id == "help_close":
+                await btn_ctx.origin_message.delete()
+                break
+            elif btn_ctx.custom_id == "help_left":
+                current_page -= 1
+                # Disable the left button if on first page.
+                actions["components"][0]["disabled"] = current_page == 0
+                actions["components"][1]["disabled"] = False
+
+                await btn_ctx.edit_origin(content=help_pages[current_page], components=[actions])
+            elif btn_ctx.custom_id == "help_right":
+                current_page += 1
+                # Disable the right button if on last page.
+                actions["components"][0]["disabled"] = False
+                actions["components"][1]["disabled"] = current_page == len(help_pages) - 1
+
+                await btn_ctx.edit_origin(content=help_pages[current_page], components=[actions])
+
+
+# endregion HELP
 
 
 ## MAIN ##

@@ -5,19 +5,26 @@
 ## Features
 
 For a full list of commands see [COMMANDS.md](COMMANDS.md).
-These are slash commands so Discord will also tell you what the commands do and how to use them.
+These are slash commands, so Discord will also tell you what the commands do and how to use them.
 
 If they are enabled, the bot can show suggestions in a specific channel.
 
 The bot also updates a member count upon someone joining/leaving the server.
 
-Embedding of elmenents, map fragments, notes, users and changesets also works by putting the following somewhere in your message in addition to using the command, using the command enabled getting extra info though if it's wanted:
+Embedding of elements, map fragments, notes, users and changesets also works by putting the following somewhere in your message in addition to using the command, using the command enabled getting extra info though if it's wanted:
 
 - `node/<ID>` (`way` and `relation` work too)
 - `note/<ID>`
 - `user/<username>`
 - `changeset/<ID>`
 - `map=#<Zoom>/<Lat>/<Lon>`
+
+
+## HELP.md
+
+A heading with one `#` creates a new page.
+This is Discord markdown, so many normal features are missing.
+For adding images don't add alt-text, or it breaks Discord formatting.
 
 
 ## Configuration

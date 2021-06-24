@@ -31,6 +31,7 @@
         "note_solved": "https://wiki.openstreetmap.org/w/images/6/6a/Closed_note_marker.png"
     },
     "emoji": {
+        "github": "<:github:857627201510834176>",
         "loading": "<:loading:847154774880682045>",
         "vote_yes": "<:vote_yes:793928045802029097>",
         "vote_abstain": "<:vote_abstain:793928045462421524>",
