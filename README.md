@@ -22,9 +22,10 @@ Embedding of elements, map fragments, notes, users and changesets also works by 
 
 ## HELP.md
 
-A heading with one `#` creates a new page.
-This is Discord markdown, so many normal features are missing.
-For adding images don't add alt-text, or it breaks Discord formatting.
+This is Discord markdown, so many normal features are missing or work differently.
+* A heading with one `#` creates a new page.
+* To add images add them as a link to the image, with no alt-text, `<>` and `!`. e.g. `[](https://link.to/image.png)`
+* Most links should be encased in `<>` to prevent Discord from showing an embed. e.g. `[Example](<https://example.com>)`
 
 
 ## Configuration
