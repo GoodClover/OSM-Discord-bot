@@ -1,5 +1,7 @@
 # OSM Discord Bot
 
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/GoodClover/OSM-Discord-bot/main.svg)](https://results.pre-commit.ci/latest/github/GoodClover/OSM-Discord-bot/main)
+
 ## Features
 
 For a full list of commands see [COMMANDS.md](COMMANDS.md).
