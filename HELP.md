@@ -25,5 +25,6 @@ Lorem docs ipsum bacon.
 # End
 
 You can help to improve these docs by editing [`HELP.md`](https://github.com/GoodClover/OSM-Discord-bot/blob/main/HELP.md) on GitHub.
+Please see the [README](https://github.com/GoodClover/OSM-Discord-bot/blob/main/README.md#helpmd) for info on formatting.
 
 ![](https://cdn.discordapp.com/attachments/791310081714290738/857633432015732741/edit_me.png)
