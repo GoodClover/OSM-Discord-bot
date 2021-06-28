@@ -1620,6 +1620,12 @@ async def on_message(msg: Message) -> None:
     elif msg.content.startswith("€showmap"):
         await msg.channel.send("Try `/showmap` :map:")
     msg_arrived = time.time()
+
+    #### "use potlatch" → sirens 🚨 ####
+    if "use potlatch" in msg.clean_content.lower():
+        await msg.add_reaction("🚨")
+        await msg.add_reaction(config["emoji"]["potlatch"])
+
     #### Inline linking ####
     # Find matches
     # elm[0] - element type (node/way/relation/changeset)
