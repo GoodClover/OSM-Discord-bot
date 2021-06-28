@@ -2025,7 +2025,7 @@ async def help(ctx: SlashContext) -> None:
 # When someone clicks a button with custom_id="delete"
 @slash.component_callback()
 async def delete(btn_ctx: ComponentContext):
-    #// (btn_ctx.author != btn_ctx.origin_message.author)
+    # // (btn_ctx.author != btn_ctx.origin_message.author)
     # AFAIKT there's currently no way to tell who authored the slash command,
     # so this will have to be powerful-only. Deletion by the command invoker is
     # handled inside the slash command, but that will break after re-boot.
