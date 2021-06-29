@@ -1960,25 +1960,30 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
     )
 
 
+help_embeds: list[Embed] = []
+
 # region HELP
 with open("HELP.md", "r") as file:
-    help_pages = file.read().split("\n# ")
-    for i in range(len(help_pages)):  # Underline the title of all pages.
-        title, body = help_pages[i].split("\n", 1)
-        if i == 0:  # As split() dosen't remove it for the first one.
-            title = title.removeprefix("# ")
-        help_pages[i] = f"__**{title}**__\n" + body
+    for page in file.read().split("\n# "):
+        title, image, body = page.split("\n", 2)
+        title = title.removeprefix("# ")  # split() dosen't remove it for the first one.
+        embed = Embed(
+            type="rich",
+            title=title,
+            image=image,
+            description=body,
+        )
+        help_embeds.append(embed)
+    for i in range(len(help_embeds)):
+        help_embeds[i].set_footer(
+            text=f"Page {i+1}/{len(help_embeds)}",
+            icon_url=config["icon_url"],
+        )
 
 help_action_row = manage_components.create_actionrow(
-    manage_components.create_button(style=ButtonStyle.gray, label=LEFT_SYMBOL, custom_id="help_left"),
-    manage_components.create_button(style=ButtonStyle.gray, label=RIGHT_SYMBOL, custom_id="help_right"),
+    manage_components.create_button(style=ButtonStyle.blue, label=LEFT_SYMBOL, custom_id="help_left"),
+    manage_components.create_button(style=ButtonStyle.blue, label=RIGHT_SYMBOL, custom_id="help_right"),
     manage_components.create_button(style=ButtonStyle.red, label=CANCEL_SYMBOL, custom_id="delete"),
-    manage_components.create_button(
-        style=ButtonStyle.URL,
-        # emoji=manage_components.emoji_to_dict(config["emoji"]["github"]), # FIXME: This errors for some reason.
-        label="View online",
-        url="https://github.com/GoodClover/OSM-Discord-bot/blob/main/HELP.md",
-    ),
 )
 
 
@@ -1994,7 +1999,7 @@ async def help(ctx: SlashContext) -> None:
 
     actions = help_action_row.copy()
     actions["components"][0]["disabled"] = True
-    msg = await ctx.send(help_pages[0], components=[actions])
+    msg = await ctx.send(embed=help_embeds[0], components=[actions])
 
     while True:
         try:
@@ -2007,7 +2012,11 @@ async def help(ctx: SlashContext) -> None:
             if btn_ctx.author != ctx.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
                 await btn_ctx.send("Only the person that ran `/help`, or helpers, can control the menu.", hidden=True)
             if btn_ctx.custom_id == "delete":
-                await btn_ctx.origin_message.delete()
+                try:
+                    await btn_ctx.origin_message.delete()
+                except discord.errors.NotFound:
+                    pass  # The global delete callback below already caught it
+                    # Note that the global callback only works for powerfuls/helpers, so this must be here.
                 break
             elif btn_ctx.custom_id == "help_left":
                 current_page -= 1
@@ -2015,14 +2024,14 @@ async def help(ctx: SlashContext) -> None:
                 actions["components"][0]["disabled"] = current_page == 0
                 actions["components"][1]["disabled"] = False
 
-                await btn_ctx.edit_origin(content=help_pages[current_page], components=[actions])
+                await btn_ctx.edit_origin(embed=help_embeds[current_page], components=[actions])
             elif btn_ctx.custom_id == "help_right":
                 current_page += 1
                 # Disable the right button if on last page.
                 actions["components"][0]["disabled"] = False
-                actions["components"][1]["disabled"] = current_page == len(help_pages) - 1
+                actions["components"][1]["disabled"] = current_page == len(help_embeds) - 1
 
-                await btn_ctx.edit_origin(content=help_pages[current_page], components=[actions])
+                await btn_ctx.edit_origin(embed=help_embeds[current_page], components=[actions])
 
 
 # endregion HELP
