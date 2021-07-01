@@ -8,7 +8,7 @@
     "api_url": "https://api.openstreetmap.org/",
     "taginfo_url": " https://taginfo.openstreetmap.org/",
     "whosthat_url": "http://whosthat.osmz.ru/",
-    "tile_url": "http://a.tile.openstreetmap.org/{zoom}/{x}/{y}.png",
+    "tile_url": "http://tile.openstreetmap.org/{zoom}/{x}/{y}.png",
     "icon_url": "https://wiki.openstreetmap.org/w/images/c/c8/Public-images-osm_logo.png",
     "taginfo_icon_url": "https://wiki.openstreetmap.org/w/images/3/32/TagInfo_logo.png",
     "overpass_url": "https://overpass.kumi.systems/api/interpreter",
