@@ -2009,21 +2009,24 @@ async def help(ctx: SlashContext) -> None:
 
     actions = help_action_row.copy()
     actions["components"][0]["disabled"] = True
-    msg = await ctx.send(embed=help_embeds[0], components=[actions])
+    action_msg = await ctx.send(embed=help_embeds[0], components=[actions])
 
     while True:
         try:
             btn_ctx: ComponentContext = await manage_components.wait_for_component(
-                client, messages=msg, components=help_action_row
+                client, messages=action_msg, components=actions, timeout=60
             )
+            # Will auto-delete after one minuite
         except asyncio.TimeoutError:  # User didn't respond
-            await msg.delete()
-        else:
+            await action_msg.delete()
+        else:  # User responded
             if btn_ctx.author != ctx.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
                 await btn_ctx.send("Only the person that ran `/help`, or helpers, can control the menu.", hidden=True)
+                continue
+
             if btn_ctx.custom_id == "delete":
                 try:
-                    await btn_ctx.origin_message.delete()
+                    await action_msg.delete()
                 except discord.errors.NotFound:
                     pass  # The global delete callback below already caught it
                     # Note that the global callback only works for powerfuls/helpers, so this must be here.
