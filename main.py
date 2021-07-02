@@ -1537,43 +1537,53 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # I barely know how to draw lines in PIL
 
 
-async def ask_render_confirmation(msg):
-    # Ask user confirmation by reacting with 4 emojis
-    await msg.add_reaction(INSPECT_EMOJI)
-    await msg.add_reaction(IMAGE_EMOJI)
-    await msg.add_reaction(EMBEDDED_EMOJI)
-    await msg.add_reaction(CANCEL_EMOJI)
+element_action_row = manage_components.create_actionrow(
+    manage_components.create_button(
+        style=ButtonStyle.blue, emoji=INSPECT_EMOJI, label="Element info", custom_id="elm_embed"
+    ),
+    manage_components.create_button(
+        style=ButtonStyle.blue, emoji=IMAGE_EMOJI, label="Element image", custom_id="elm_image"
+    ),
+    manage_components.create_button(style=ButtonStyle.blue, label="Both", custom_id="elm_both"),
+    manage_components.create_button(style=ButtonStyle.red, label=CANCEL_SYMBOL, custom_id="delete"),
+)
 
-    def check(reaction, user_obj):
-        return (
-            reaction.message == msg
-            and user_obj == msg.author
-            and (str(reaction.emoji) in {INSPECT_EMOJI, IMAGE_EMOJI, CANCEL_EMOJI, EMBEDDED_EMOJI})
-        )
 
-    try:
-        reaction, user_obj = await client.wait_for("reaction_add", timeout=15.0, check=check)
-    except asyncio.TimeoutError:  # User didn't respond
-        add_image = False
-        add_embedded = False
-    else:  # User responded
-        if str(reaction.emoji) == IMAGE_EMOJI:
-            add_image = True
-            add_embedded = False
-        elif str(reaction.emoji) == EMBEDDED_EMOJI:
-            add_image = False
-            add_embedded = True
-        elif str(reaction.emoji) == CANCEL_EMOJI:
-            add_image = False
-            add_embedded = False
-        else:
-            add_embedded = True
-            add_image = True
-    await msg.clear_reaction(INSPECT_EMOJI)
-    await msg.clear_reaction(IMAGE_EMOJI)
-    await msg.clear_reaction(EMBEDDED_EMOJI)
-    await msg.clear_reaction(CANCEL_EMOJI)
-    return add_image, add_embedded
+async def ask_render_confirmation(msg: Message) -> tuple[bool, bool]:
+    "Message → add_image, add_embed"
+    actions = element_action_row.copy()
+    action_msg = await msg.reply(content="Element controls:", components=[actions])
+
+    while True:
+        try:
+            btn_ctx: ComponentContext = await manage_components.wait_for_component(
+                client, messages=action_msg, components=actions, timeout=15
+            )
+        except asyncio.TimeoutError:  # User didn't respond
+            await action_msg.delete()
+            return False, False
+        else:  # User responded
+            if btn_ctx.author != msg.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
+                await btn_ctx.send("Only the message author, or helpers, can control the menu.", hidden=True)
+                continue
+
+            if btn_ctx.custom_id == "delete":
+                try:
+                    await action_msg.delete()
+                except discord.errors.NotFound:
+                    pass  # The global delete callback below already caught it
+                    # Note that the global callback only works for powerfuls/helpers, so this must be here.
+                return False, False
+
+            elif btn_ctx.custom_id == "elm_embed":
+                await action_msg.delete()
+                return False, True
+            elif btn_ctx.custom_id == "elm_image":
+                await action_msg.delete()
+                return True, False
+            elif btn_ctx.custom_id == "elm_both":
+                await action_msg.delete()
+                return True, True
 
 
 @client.event  # type: ignore
