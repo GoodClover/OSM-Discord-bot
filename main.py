@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import math
 import os
@@ -10,6 +11,7 @@ import re
 import time
 from datetime import datetime
 from io import BytesIO
+from multiprocessing import Pool
 from typing import Any
 from typing import Iterable
 from typing import Union
@@ -1396,33 +1398,56 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
+def _get_image_cluster__get_image(
+    session: requests.Session, zoom: int, tile_url: str, d: tuple[int, int, int]
+) -> object | tuple[str, str, Exception]:
+    xtile, ytile, xtile_corrected = d
+    # print(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile))
+    try:
+        res = session.get(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), headers=HEADERS)
+        return Image.open(BytesIO(res.content))
+    except Exception as e:
+        print(e)
+        return ("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), e)
+
+
 async def get_image_cluster(
     lat_deg: float, lon_deg: float, zoom: int, tile_url: str = config["tile_url"]
-) -> tuple[File, str]:
+) -> tuple[Any, str, list[tuple[str, str, Exception]]]:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    n: int = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    frag = zoom, lat_deg, lon_deg
-    tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
-    xmin, xmax, ymin, ymax, tile_offset = tile_range
-    print(tile_range)
+    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
     errorlog = []
     Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
+
+    t = time.time()
+    tile_positions = []
     for xtile in range(xmin - 1, xmax + 2):
         # print(xtile, xtile % n)
         xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
         # Xtile is preserved, because it's used for plotting it on map
         for ytile in range(ymin, min([ymax + 2, n])):
-            # print(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile))
-            try:
-                res = requests.get(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), headers=HEADERS)
-                tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, tile2pixel((xtile, ytile), zoom, tile_range))
-            except Exception as e:
-                print(e)
-                errorlog.append(("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), e))
-    filename = config["map_save_file"].format(t=time.time())
+            tile_positions.append((xtile, ytile, xtile_corrected))
+
+    with Pool(config["processes"]) as pool:
+        session = requests.Session()
+        tile_images = pool.map(
+            functools.partial(_get_image_cluster__get_image, session, zoom, tile_url), tile_positions
+        )
+
+    for i in range(len(tile_positions)):
+        if isinstance(tile_images[i], tuple):
+            errorlog.append(tile_images[i])
+        else:
+            Cluster.paste(
+                tile_images[i],
+                tile2pixel((tile_positions[i][0], tile_positions[i][1]), zoom, (xmin, xmax, ymin, ymax, tile_offset)),
+            )
+
+    print(f"Download + paste: {round(time.time()-t, 1)}s")
+    filename: str = config["map_save_file"].format(t=time.time())
     Cluster.save(filename)
     return Cluster, filename, errorlog
 

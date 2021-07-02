@@ -3,6 +3,7 @@
     "josm_tips_file": "../ohno-OSM/josm_tips.md",
     "map_save_file": "data/cluster.png",
     "autodelete_delay": 4,
+    "processes": 3,
     "thumb_size": 512,
     "site_url": "https://www.openstreetmap.org/",
     "api_url": "https://api.openstreetmap.org/",
