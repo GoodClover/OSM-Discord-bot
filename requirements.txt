@@ -1,5 +1,4 @@
-requests
-python-dotenv
-discord.py
-discord-py-slash-command>=1.1.0
-overpy
+discord_py_slash_command==2.0.3
+overpy==0.6
+discord.py==1.7.3
+Pillow==8.3.0
