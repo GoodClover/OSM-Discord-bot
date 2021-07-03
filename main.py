@@ -17,6 +17,7 @@ from typing import Iterable
 from typing import Union
 from urllib.parse import quote
 
+import aiohttp
 import discord
 import overpy
 import requests
@@ -1398,17 +1399,29 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
-def _get_image_cluster__get_image(
-    session: requests.Session, zoom: int, tile_url: str, d: tuple[int, int, int]
-) -> object | tuple[str, str, Exception]:
-    xtile, ytile, xtile_corrected = d
-    # print(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile))
+async def _get_image_cluster__get_image(
+    session: aiohttp.ClientSession,
+    cluster: Image,
+    zoom: int,
+    tile_url: str,
+    xtile: int,
+    ytile: int,
+    xtile_corrected: int,
+    tile_range: tuple,
+) -> None | tuple[str, str, Exception]:
+    url = tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)
+    # print(f"Requesting: {url}")
     try:
-        res = session.get(tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), headers=HEADERS)
-        return Image.open(BytesIO(res.content))
+        res = await session.get(url, headers=HEADERS)
+        data = await res.content.read()
+        cluster.paste(
+            Image.open(BytesIO(data)),
+            tile2pixel((xtile, ytile), zoom, tile_range),
+        )
+        return None
     except Exception as e:
         print(e)
-        return ("map tile", tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile), e)
+        return ("map tile", url, e)
 
 
 async def get_image_cluster(
@@ -1417,39 +1430,45 @@ async def get_image_cluster(
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
     n: int = 2 ** zoom  # N is number of tiles in one direction on zoom level
+
     # tile_offset - By how many tiles should tile grid shifted somewhere.
-    xmin, xmax, ymin, ymax, tile_offset = get_image_tile_range(lat_deg, lon_deg, zoom)
+    # xmin, xmax, ymin, ymax, tile_offset
+    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
+
     errorlog = []
-    Cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
+    cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
 
     t = time.time()
-    tile_positions = []
-    for xtile in range(xmin - 1, xmax + 2):
-        # print(xtile, xtile % n)
-        xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
-        # Xtile is preserved, because it's used for plotting it on map
-        for ytile in range(ymin, min([ymax + 2, n])):
-            tile_positions.append((xtile, ytile, xtile_corrected))
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for xtile in range(xmin - 1, xmax + 2):
+            # print(xtile, xtile % n)
+            xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
+            # Xtile is preserved, because it's used for plotting it on map
+            for ytile in range(ymin, min([ymax + 2, n])):
+                tasks.append(
+                    _get_image_cluster__get_image(
+                        session,
+                        cluster,
+                        zoom,
+                        tile_url,
+                        xtile,
+                        ytile,
+                        xtile_corrected,
+                        tile_range,
+                    )
+                )
+        errors = await asyncio.gather(*tasks, return_exceptions=True)
 
-    with Pool(config["processes"]) as pool:
-        session = requests.Session()
-        tile_images = pool.map(
-            functools.partial(_get_image_cluster__get_image, session, zoom, tile_url), tile_positions
-        )
-
-    for i in range(len(tile_positions)):
-        if isinstance(tile_images[i], tuple):
-            errorlog.append(tile_images[i])
-        else:
-            Cluster.paste(
-                tile_images[i],
-                tile2pixel((tile_positions[i][0], tile_positions[i][1]), zoom, (xmin, xmax, ymin, ymax, tile_offset)),
-            )
+        for err in errors:
+            if err is not None:
+                errorlog.append(err)
 
     print(f"Download + paste: {round(time.time()-t, 1)}s")
     filename: str = config["map_save_file"].format(t=time.time())
-    Cluster.save(filename)
-    return Cluster, filename, errorlog
+    cluster.save(filename)
+    return cluster, filename, errorlog
 
 
 def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
