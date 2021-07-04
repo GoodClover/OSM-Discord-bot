@@ -3,13 +3,12 @@
     "josm_tips_file": "../ohno-OSM/josm_tips.md",
     "map_save_file": "data/cluster.png",
     "autodelete_delay": 4,
-    "threads": 5,
     "thumb_size": 512,
     "site_url": "https://www.openstreetmap.org/",
     "api_url": "https://api.openstreetmap.org/",
     "taginfo_url": " https://taginfo.openstreetmap.org/",
     "whosthat_url": "http://whosthat.osmz.ru/",
-    "tile_url": "http://tile.openstreetmap.org/{zoom}/{x}/{y}.png",
+    "tile_url": "http://a.tile.openstreetmap.org/{zoom}/{x}/{y}.png",
     "icon_url": "https://wiki.openstreetmap.org/w/images/c/c8/Public-images-osm_logo.png",
     "taginfo_icon_url": "https://wiki.openstreetmap.org/w/images/3/32/TagInfo_logo.png",
     "overpass_url": "https://overpass.kumi.systems/api/interpreter",
@@ -50,7 +49,16 @@
         "relation_member": "<:relation_member:793915489457143819>",
         "tag_key": "<:tag_key:793915488672940042>",
         "tag": "<:tag:793915489063141456>",
-        "tag_value": "<:tag_value:793915488596918272>"
+        "tag_value": "<:tag_value:793915488596918272>",
+        "inspect": "🔎",
+        "image": "🖼️",
+        "embedded": "🛏️",
+        "cancel": "❌",
+        "delete": "🗑️",
+        "left": "←",
+        "right": "→",
+        "cancel_utf": "✘",
+        "sirens": "🚨"
     },
     "server_settings": {
         "413070382636072960": {
@@ -60,5 +68,31 @@
             "mappers_count_channel": 578578746244726794,
             "suggestions_enabled": false
         }
+    }, 
+    "rendering": {
+        "max_zoom": 19,
+        "max_note_zoom": 17,
+        "tile_w": 256,
+        "tile_h": 256,
+        "tiles_x": 5,
+        "tiles_y": 5,
+        "tile_margin_x": 0.1,
+        "tile_margin_y": 0.1,
+        "HEADERS": {
+            "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
+            "Accept": "image/png",
+            "Accept-Charset": "utf-8",
+            "Accept-Encoding": "none",
+            "Accept-Language": "en-GB,en",
+            "Connection": "keep-alive",
+        }
+    },
+    "rate_limit": {
+        "time_period": 30
+        "max_calls": 10
+        "max_elements": 10
+        "element_count_exp": "This field is calculated within script (ln 105)."
+        "rate_extra_exp": 1.8
+        "rendering_rate_exp": 0.8
     }
 }

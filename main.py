@@ -43,53 +43,20 @@ from PIL import ImageDraw  # For drawing elements
 
 ## SETUP ##
 # Regex
-SS = r"(?<!\/|\w)"  # Safe Start
-SE = r"(?!\/|\w)"  # Safe End
-DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
-POS_INT = r"[0-9]+"
-### Inline linking ###
-ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-NOTE_INLINE_REGEX = rf"{SS}(note)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
-USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
-# FIXME: For some reason this allows stuff after the end of the map fragment.
-MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
-MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
-
-# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
-cached_files: set = set()
-# Set of unix timestamps.
-recent_googles: set = set()
+import regexes
+cached_files: set = set()  # Global set of saved filenames. If on_message fails, it will remove cached files in way similar to /googlebad.
+recent_googles: set = set()  # Set of unix timestamps.
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 ### Rendering ###
-max_zoom = 19  # Maximum zoom level without notes.
-max_note_zoom = 17  # Maximum zoom, when notes are present on map.
-tile_w, tile_h = 256, 256  # Tile size used for renderer
-tiles_x, tiles_y = 5, 5  # Dimensions of output map fragment
-tile_margin_y, tile_margin_x = 0.1, 0.1  # How much free space is left at edges
+# max_zoom - Maximum zoom level without notes.
+# Max_note_zoom - Maximum zoom, when notes are present on map.
+# tile_w/tile_h - Tile size used for renderer
+# tiles_x/tiles_y - Dimensions of output map fragment
+# tile_margin_x / tile_margin_y - How much free space is left at edges
 # Used in render_elms_on_cluster. List of colours to be cycled.
+# Colours need to be reworked for something prettier, therefore don't relocate them yet.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
-
-### Rate-limiting ###
-# These 2 are used in check_rate_limit
-time_period = 30
-max_calls = 10
-# Following 4 are used by on_message
-max_elements = 10
-element_count_exp = round(math.log(max_calls, max_elements), 2)  # 1.17
-rate_extra_exp = 1.8
-rendering_rate_exp = 0.8
-
-HEADERS = {
-    "User-Agent": "OSM Discord Bot <https://github.com/GoodClover/OSM-Discord-bot>",
-    "Accept": "image/png",
-    "Accept-Charset": "utf-8",
-    "Accept-Encoding": "none",
-    "Accept-Language": "en-GB,en",
-    "Connection": "keep-alive",
-}
-
 
 def load_config() -> None:
     global config, guild_ids
@@ -110,31 +77,28 @@ config: dict[str, Any] = {}
 guild_ids: list[int] = []
 load_config()
 
-ELM_INLINE_REGEX = re.compile(ELM_INLINE_REGEX, re.IGNORECASE)
-CHANGESET_INLINE_REGEX = re.compile(CHANGESET_INLINE_REGEX, re.IGNORECASE)
-NOTE_INLINE_REGEX = re.compile(NOTE_INLINE_REGEX, re.IGNORECASE)
-USER_INLINE_REGEX = re.compile(USER_INLINE_REGEX, re.IGNORECASE)
-MAP_FRAGMENT_INLINE_REGEX = re.compile(MAP_FRAGMENT_INLINE_REGEX, re.IGNORECASE)
-INTEGER_REGEX = re.compile(POS_INT)
+### Rate-limiting ###
+config["rate_limit"]["element_count_exp"] = round(math.log(config["rate_limit"]["max_calls"], config["rate_limit"]["max_elements"]), 2)  # 1.17
+
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
-res = requests.get(config["symbols"]["note_solved"], headers=HEADERS)
+res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
 closed_note_icon = Image.open(BytesIO(res.content))
-res = requests.get(config["symbols"]["note_open"], headers=HEADERS)
+res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
 open_note_icon = Image.open(BytesIO(res.content))
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
-INSPECT_EMOJI = "🔎"  # :mag_right:
-IMAGE_EMOJI = "🖼️"  # :frame_photo:
-EMBEDDED_EMOJI = "🛏️"  # :bed:
-CANCEL_EMOJI = "❌"  # :x:
-DELETE_EMOJI = "🗑️"  # :wastebasket:
-LOADING_EMOJI = config["emoji"]["loading"]  # :loading:
-LEFT_SYMBOL = "←"
-RIGHT_SYMBOL = "→"
-CANCEL_SYMBOL = "✘"
+INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:  
+IMAGE_EMOJI = config["emoji"]["image"]  # :frame_photo:
+EMBEDDED_EMOJI = config["emoji"]["embedded"]  # :bed:
+CANCEL_EMOJI = config["emoji"]["cancel"]  # :x:
+DELETE_EMOJI = config["emoji"]["inspect"]  # :wastebasket:
+LOADING_EMOJI = config["emoji"]["delete"]  # :loading:
+LEFT_SYMBOL = config["emoji"]["left"]  # "←"
+RIGHT_SYMBOL = config["emoji"]["right"]  # "→"
+CANCEL_SYMBOL = config["emoji"]["cancel_utf"]  # "✘"
 
 with open(config["ohno_file"], "r", encoding="utf8") as file:
     ohnos = [entry for entry in file.read().split("\n\n") if entry != ""]
@@ -179,9 +143,9 @@ def check_rate_limit(user, extra=0):
         command_history[user] = set()
     # Extra is useful in case when user queries lot of elements in one query.
     command_history[user].add(tnow + extra)
-    command_history[user] = set(filter(lambda x: x > tnow - time_period, command_history[user]))
+    command_history[user] = set(filter(lambda x: x > tnow - config["rate_limit"]["time_period"], command_history[user]))
     # print(user, command_history[user])
-    if len(command_history[user]) > max_calls:
+    if len(command_history[user]) > config["rate_limit"]["max_calls"]:
         return False
     return True
 
@@ -263,12 +227,12 @@ async def quota_command(ctx: SlashContext) -> None:
     msg = "\n".join(
         list(
             map(
-                lambda x: f"Command available in {round(x+time_period-tnow)} sec.",
+                lambda x: f"Command available in {round(x+config["rate_limit"]["time_period"]-tnow)} sec.",
                 sorted(command_history[ctx.author_id]),
             )
         )
     )
-    msg += f"\nYou can still send {max_calls-len(command_history[ctx.author_id])} actions to this bot."
+    msg += f"\nYou can still send {config["rate_limit"]["max_calls"]-len(command_history[ctx.author_id])} actions to this bot."
     await ctx.send(msg, hidden=True)
 
 
@@ -437,7 +401,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     if "map" in extras_list:
         await ctx.defer()
         render_queue = await elms_to_render(elm_type, elm_id)
-        check_rate_limit(ctx.author_id, extra=len(render_queue) ** rendering_rate_exp)
+        check_rate_limit(ctx.author_id, extra=len(render_queue) ** config["rate_limit"]["rendering_rate_exp"])
         bbox = get_render_queue_bounds(render_queue)
         zoom, lat, lon = calc_preview_area(bbox)
         cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
@@ -1061,7 +1025,7 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
 
 
 def frag_to_bits(URL: str) -> tuple[int, float, float]:
-    matches = re.findall(MAP_FRAGEMT_CAPTURING_REGEX, URL)
+    matches = re.findall(regexes.MAP_FRAGEMT_CAPTURING, URL)
     if len(matches) != 1:
         raise ValueError("Invalid map fragment URL.")
     zoom, lat, lon = matches[0]
@@ -1328,12 +1292,12 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
-    zoom_x = int(math.log2((360 / delta_lon) * (tiles_x - 2 * tile_margin_x)))
+    zoom_x = int(math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"])))
     center_lon = delta_lon / 2 + min_lon
-    zoom_y = max_zoom + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > tiles_y - 2 * tile_margin_y:
+    zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"]:
         zoom_y -= 1  # Bit slow and dumb approach
-    zoom = min(zoom_x, zoom_y, max_zoom)
+    zoom = min(zoom_x, zoom_y, config["rendering"]["max_zoom"])
     tile_y_min = deg2tile_float(max_lat, 0, zoom)[1]
     tile_y_max = deg2tile_float(min_lat, 0, zoom)[1]
     print(zoom, center_lon)
@@ -1353,21 +1317,21 @@ async def get_image_cluster_old(
     tile_url: str = config["tile_url"],
 ) -> File:
     # Modified from https://github.com/ForgottenHero/mr-maps
-    delta_long = 0.00421 * math.pow(2, max_zoom - int(zoom))
-    delta_lat = 0.0012 * math.pow(2, max_zoom - int(zoom))
+    delta_long = 0.00421 * math.pow(2, config["rendering"]["max_zoom"] - int(zoom))
+    delta_lat = 0.0012 * math.pow(2, config["rendering"]["max_zoom"] - int(zoom))
     lat_deg = float(lat_deg) - (delta_lat / 2)
     lon_deg = float(lon_deg) - (delta_long / 2)
     i = 0
     j = 0
     xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
     xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * tile_w - 1, (ymax - ymin + 1) * tile_h - 1))
+    Cluster = Image.new("RGB", ((xmax - xmin + 1) * config["rendering"]["tile_w"] - 1, (ymax - ymin + 1) * config["rendering"]["tile_h"] - 1))
     for xtile in range(xmin, xmax + 1):
         for ytile in range(ymin, ymax + 1):
             try:
-                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=HEADERS)
+                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=config["rendering"]["HEADERS"])
                 tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, box=((xtile - xmin) * tile_w, (ytile - ymin) * tile_h))
+                Cluster.paste(tile, box=((xtile - xmin) * config["rendering"]["tile_w"], (ytile - ymin) * config["rendering"]["tile_h"]))
                 i = i + 1
             except Exception as e:
                 print(e)
@@ -1381,19 +1345,19 @@ async def get_image_cluster_old(
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = deg2tile_float(lat_deg, lon_deg, zoom)
-    xmin, xmax = int(center_x - tiles_x / 2), int(center_x + tiles_x / 2)
+    xmin, xmax = int(center_x - config["rendering"]["tiles_x"] / 2), int(center_x + config["rendering"]["tiles_x"] / 2)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    if tiles_x % 2 == 0:
+    if config["rendering"]["tiles_x"] % 2 == 0:
         xmax -= 1
-    ymin, ymax = int(center_y - tiles_y / 2), int(center_y + tiles_y / 2)
-    if tiles_y % 2 == 0:
+    ymin, ymax = int(center_y - config["rendering"]["tiles_y"] / 2), int(center_y + config["rendering"]["tiles_y"] / 2)
+    if config["rendering"]["tiles_y"] % 2 == 0:
         ymax -= 1
     ymin = max(ymin, 0)  # Sets vertical limits to area.
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
     print("Tile offset calculation")
-    print(center_x, tiles_x, tiles_x % 2, (tiles_x % 2) / 2, (center_x + (tiles_x % 2) / 2))
-    tile_offset = ((center_x + (tiles_x % 2) / 2) % 1, (center_y + (tiles_x % 2) / 2) % 1)
+    print(center_x, config["rendering"]["tiles_x"], config["rendering"]["tiles_x"] % 2, (config["rendering"]["tiles_x"] % 2) / 2, (center_x + (config["rendering"]["tiles_x"] % 2) / 2))
+    tile_offset = ((center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1, (center_y + (config["rendering"]["tiles_x"] % 2) / 2) % 1)
     # tile_offset = 0,0
     print("Offset:", tile_offset)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
@@ -1412,7 +1376,7 @@ async def _get_image_cluster__get_image(
     url = tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)
     # print(f"Requesting: {url}")
     try:
-        res = await session.get(url, headers=HEADERS)
+        res = await session.get(url, headers=config["rendering"]["HEADERS"])
         data = await res.content.read()
         cluster.paste(
             Image.open(BytesIO(data)),
@@ -1437,7 +1401,7 @@ async def get_image_cluster(
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
-    cluster = Image.new("RGB", (tiles_x * tile_w - 1, tiles_y * tile_h - 1))
+    cluster = Image.new("RGB", (config["rendering"]["tiles_x"] * config["rendering"]["tile_w"] - 1, config["rendering"]["tiles_y"] * config["rendering"]["tile_h"] - 1))
 
     t = time.time()
     async with aiohttp.ClientSession() as session:
@@ -1508,7 +1472,7 @@ def tile2pixel(xy, zoom, tile_range):
     # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((xy[0] - xmin - tile_offset[0]) * tile_w), round((xy[1] - ymin - tile_offset[1]) * tile_h))
+    coord = (round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]), round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]))
     return coord
 
 
@@ -1676,8 +1640,8 @@ async def on_message(msg: Message) -> None:
     msg_arrived = time.time()
 
     #### "use potlatch" → sirens 🚨 ####
-    if "use potlatch" in msg.clean_content.lower():
-        await msg.add_reaction("🚨")
+    if regexes.POTLATCH.findall(msg.clean_content):
+        await msg.add_reaction(config["emoji"]["sirens"])
         await msg.add_reaction(config["emoji"]["potlatch"])
 
     #### Inline linking ####
@@ -1686,26 +1650,26 @@ async def on_message(msg: Message) -> None:
     # elm[1] - separator used
     # elm[2] - element ID
     elms = [
-        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
-        for elm in ELM_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
+        for elm in regexes.ELM_INLINE.findall(msg.clean_content)
     ]
     changesets = [
-        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
-        for elm in CHANGESET_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
+        for elm in regexes.CHANGESET_INLINE.findall(msg.clean_content)
     ]
     notes = [
-        (elm[0].lower(), tuple(INTEGER_REGEX.findall(elm[2])), elm[1])
-        for elm in NOTE_INLINE_REGEX.findall(msg.clean_content)
+        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
+        for elm in regexes.NOTE_INLINE.findall(msg.clean_content)
     ]
-    users = [thing.split("/")[1] for thing in USER_INLINE_REGEX.findall(msg.clean_content)]
-    map_frags = MAP_FRAGMENT_INLINE_REGEX.findall(msg.clean_content)
+    users = [thing.split("/")[1] for thing in regexes.USER_INLINE.findall(msg.clean_content)]
+    map_frags = regexes.MAP_FRAGMENT_INLINE.findall(msg.clean_content)
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id
-    check_rate_limit(author_id, -time_period - 1)  # Refresh command history
+    check_rate_limit(author_id, -config["rate_limit"]["time_period"] - 1)  # Refresh command history
     if queried_elements_count == 0:
         return
-    elif queried_elements_count > max_elements - len(command_history[author_id]):
+    elif queried_elements_count > config["rate_limit"]["max_elements"] - len(command_history[author_id]):
         # If there are too many elements, just ignore.
         return
 
@@ -1723,9 +1687,9 @@ async def on_message(msg: Message) -> None:
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
     # User quota is checked after they confirmed element lookup.
-    for i in range(int(queried_elements_count ** element_count_exp) + 1):
+    for i in range(int(queried_elements_count ** config["rate_limit"]["element_count_exp"]) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
-        rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
+        rating = check_rate_limit(author_id, round(i ** config["rate_limit"]["rate_extra_exp"], 2))
         # if not rating:
         #     return
     async with msg.channel.typing():
@@ -1788,13 +1752,13 @@ async def on_message(msg: Message) -> None:
         msg_arrived = time.time()
         if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
-            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** rendering_rate_exp)
+            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** config["rate_limit"]["rendering_rate_exp"])
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"{LOADING_EMOJI} Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
-                zoom = min([zoom, max_note_zoom])
+                zoom = min([zoom, config["rendering"]["max_note_zoom"]])
             print(zoom, lat, lon, sep="/")
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             cached_files.add(filename)
