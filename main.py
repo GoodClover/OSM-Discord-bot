@@ -120,21 +120,8 @@ slash = SlashCommand(client, sync_commands=True)
 
 
 ## UTILS ##
-
-
-def is_powerful(member: Member, guild: Guild) -> bool:
-    return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
-
-
-def str_to_date(text: str, suffix: str = "Z") -> datetime:
-    return datetime.strptime(text, "%Y-%m-%dT%H:%M:%S" + suffix)
-
-
-def sanitise(text: str) -> str:
-    """Make user input safe to just copy."""
-    text = text.replace("@", "�")
-    return text
-
+from utils import *
+import utils
 
 def check_rate_limit(user, extra=0):
     # Sorry for no typehints, i don't know what types to have
@@ -149,33 +136,6 @@ def check_rate_limit(user, extra=0):
         return False
     return True
 
-
-def get_suffixed_tag(
-    tags: dict[str, str],
-    key: str,
-    suffix: str,
-) -> tuple[str, str] | tuple[None, None]:
-    # Looks like two style checkers tend to disagree on argument whitespacing.
-    suffixed_key = key + suffix
-    if suffixed_key in tags:
-        return suffixed_key, tags[suffixed_key]
-    elif key in tags:
-        return key, tags[key]
-    else:
-        return None, None
-
-
-# This doesn't work correct.
-# def comma_every_three(text: str) -> str:
-#     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
-
-
-def msg_to_link(msg: Union[Message, SlashMessage]) -> str:
-    return f"https://discord.com/channels/{msg.guild.id}/{msg.channel.id}/{msg.id}"
-
-
-def user_to_mention(user: Member) -> str:
-    return f"<@{user.id}>"
 
 
 ## CLIENT ##
@@ -311,7 +271,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         embed.set_thumbnail(url=config["symbols"]["tag" if value else "key"])
 
     # This is the last time taginfo updated:
-    embed.timestamp = str_to_date(data["data_until"])
+    embed.timestamp = utils.str_to_date(data["data_until"])
 
     # embed.set_author(name="taginfo", url=config["taginfo_url"] + "about")
 
@@ -444,13 +404,13 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
     embed.set_thumbnail(url=config["symbols"][elm["type"]])
 
-    embed.timestamp = str_to_date(elm["timestamp"])
+    embed.timestamp = utils.str_to_date(elm["timestamp"])
 
     # embed.set_author(name=elm["user"], url=config["site_url"] + "user/" + elm["user"])
 
     embed.title = elm["type"].capitalize() + ": "
     if "tags" in elm:
-        key, name = get_suffixed_tag(elm["tags"], "name", ":en")
+        key, name = utils.get_suffixed_tag(elm["tags"], "name", ":en")
     else:
         name = None
     if name:
@@ -528,7 +488,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
 
             # "description", "inscription"
             for key in ["note", "FIXME", "fixme"]:
-                key_languaged, value = get_suffixed_tag(elm["tags"], "note", ":en")
+                key_languaged, value = utils.get_suffixed_tag(elm["tags"], "note", ":en")
                 if value:
                     elm["tags"].pop(key_languaged)
                     embed.add_field(name=key.capitalize(), value="> " + value, inline=False)
@@ -655,7 +615,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     # There doesn't appear to be a changeset icon
     # embed.set_thumbnail(url=config["symbols"]["changeset"])
 
-    embed.timestamp = str_to_date(changeset["closed_at"])
+    embed.timestamp = utils.str_to_date(changeset["closed_at"])
 
     embed.set_author(name=changeset["user"], url=config["site_url"] + "user/" + quote(changeset["user"]))
 
@@ -799,7 +759,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     else:
         closed = False
         embed.set_thumbnail(url=config["symbols"]["note_open"])
-    embed.timestamp = str_to_date(note["properties"]["date_created"].replace(" ", "T")[:19] + "Z")
+    embed.timestamp = utils.str_to_date(note["properties"]["date_created"].replace(" ", "T")[:19] + "Z")
     if "user" in note["properties"]["comments"][0]:
         creator = note["properties"]["comments"][0]["user"]
         embed.set_author(name=creator, url=note["properties"]["comments"][0]["user_url"])
@@ -897,14 +857,6 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
     await ctx.send(embed=user_embed(user, extras_list))
 
 
-def get_id_from_username_old(username: str) -> int:
-    whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
-    if len(whosthat) > 0:
-        return whosthat[0]["id"]
-    else:
-        raise ValueError(f"User `{username}` not found")
-
-
 def get_id_from_username(username: str) -> int:
     whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
     if len(whosthat) > 0:
@@ -958,7 +910,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
         embed.set_thumbnail(url=config["symbols"]["user"])
 
     # embed.timestamp = datetime.now()
-    # embed.timestamp = str_to_date(user["account_created"])
+    # embed.timestamp = utils.str_to_date(user["account_created"])
 
     embed.title = "User: " + user["display_name"]
 
@@ -1021,7 +973,7 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
 
         img_msg = await ctx.channel.send(msg, file=File(filename))
 
-    await first_msg.edit(content=f'Getting image… Done[!](<{msg_to_link(img_msg)}> "Link to message with image") :map:')
+    await first_msg.edit(content=f'Getting image… Done[!](<{utils.msg_to_link(img_msg)}> "Link to message with image") :map:')
 
 
 def frag_to_bits(URL: str) -> tuple[int, float, float]:
@@ -1308,38 +1260,6 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
         center_lat = (max_lat - min_lat) / 2 + min_lat
     print(center_lat, min_lat, max_lat)
     return (zoom, center_lat, center_lon)
-
-
-async def get_image_cluster_old(
-    lat_deg: float,
-    lon_deg: float,
-    zoom: int,
-    tile_url: str = config["tile_url"],
-) -> File:
-    # Modified from https://github.com/ForgottenHero/mr-maps
-    delta_long = 0.00421 * math.pow(2, config["rendering"]["max_zoom"] - int(zoom))
-    delta_lat = 0.0012 * math.pow(2, config["rendering"]["max_zoom"] - int(zoom))
-    lat_deg = float(lat_deg) - (delta_lat / 2)
-    lon_deg = float(lon_deg) - (delta_long / 2)
-    i = 0
-    j = 0
-    xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
-    xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * config["rendering"]["tile_w"] - 1, (ymax - ymin + 1) * config["rendering"]["tile_h"] - 1))
-    for xtile in range(xmin, xmax + 1):
-        for ytile in range(ymin, ymax + 1):
-            try:
-                res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=config["rendering"]["HEADERS"])
-                tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, box=((xtile - xmin) * config["rendering"]["tile_w"], (ytile - ymin) * config["rendering"]["tile_h"]))
-                i = i + 1
-            except Exception as e:
-                print(e)
-        j = j + 1
-    filename = config["map_save_file"].format(t=time.time())
-    Cluster.save(filename)
-    # return File(filename)
-    return Cluster
 
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
@@ -1875,7 +1795,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
 
     suggestion_chanel = client.get_channel(config["server_settings"][str(ctx.guild.id)]["suggestion_channel"])
 
-    suggestion = sanitise(suggestion).replace("\n", "\n> ")
+    suggestion = utils.sanitise(suggestion).replace("\n", "\n> ")
 
     sugg_msg = await suggestion_chanel.send(
         f"""
@@ -1888,7 +1808,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     )
     await ctx.send(
         f"Sent suggestion in <#{config['server_settings'][str(ctx.guild.id)]['suggestion_channel']}>."
-        + msg_to_link(sugg_msg),
+        + utils.msg_to_link(sugg_msg),
         hidden=True,
     )
     await sugg_msg.add_reaction(config["emoji"]["vote_yes"])
@@ -1962,8 +1882,8 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\n__**Voting closed**__ by {user_to_mention(ctx.author)}.\n"
-        + f"Result: **{sanitise(result)}**\n"
+        + f"\n\n__**Voting closed**__ by {utils.user_to_mention(ctx.author)}.\n"
+        + f"Result: **{utils.sanitise(result)}**\n"
         + f"Voting closed with: {votes['yes']} {config['emoji']['vote_yes']}"
         + f", {votes['abstain']} {config['emoji']['vote_abstain']}"
         + f", {votes['no']} {config['emoji']['vote_no']}"
@@ -1973,7 +1893,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
     # Extra brackets above are to stop weird auto-formatting.
 
     await ctx.send(
-        f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the result.\n{msg_to_link(msg)}",
+        f"Closed suggestion with result '{result}'.\nYou can re-run this command to change the result.\n{utils.msg_to_link(msg)}",
         hidden=True,
     )
 
@@ -2028,7 +1948,7 @@ async def help(ctx: SlashContext) -> None:
         except asyncio.TimeoutError:  # User didn't respond
             await action_msg.delete()
         else:  # User responded
-            if btn_ctx.author != ctx.author and not is_powerful(btn_ctx.author, btn_ctx.guild):
+            if btn_ctx.author != ctx.author and not utils.is_powerful(btn_ctx.author, btn_ctx.guild):
                 await btn_ctx.send("Only the person that ran `/help`, or helpers, can control the menu.", hidden=True)
                 continue
 
@@ -2066,7 +1986,7 @@ async def delete(btn_ctx: ComponentContext):
     # so this will have to be powerful-only. Deletion by the command invoker is
     # handled inside the slash command, but that will break after re-boot.
     # This will always work, even after re-boots.
-    if not is_powerful(btn_ctx.author, btn_ctx.guild):
+    if not utils.is_powerful(btn_ctx.author, btn_ctx.guild):
         await btn_ctx.send("Only the person that called the command or helpers can delete it.", hidden=True)
         return
     await btn_ctx.origin_message.delete()
