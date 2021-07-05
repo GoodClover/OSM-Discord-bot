@@ -1230,7 +1230,7 @@ async def _get_image_cluster__get_image(
         data = await res.content.read()
         cluster.paste(
             Image.open(BytesIO(data)),
-            tile2pixel((xtile, ytile), zoom, tile_range),
+            utils.tile2pixel((xtile, ytile), zoom, tile_range),
         )
         return None
     except Exception as e:
@@ -1301,38 +1301,13 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     draw.ellipse(twoPointList, fill=colour)
 
 
-def wgs2pixel(
-    xy: tuple[float | int, float | int],
-    tile_range: tuple[int, int, int, int, tuple[float, float]],
-    frag: tuple[int, float, float],
-):
-    """Convert geographical coordinates to X-Y coordinates to be used on map."""
-    # Tile range is calculated in get_image_tile_range
-    zoom, lat_deg, lon_deg = frag
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
-    # tile_offset - By how many tiles should tile grid shifted somewhere.
-    xmin, xmax, ymin, ymax, tile_offset = tile_range
-    coord = utils.deg2tile_float(xy[0], xy[1], zoom)
-    # Coord is now actual pixels, where line must be drawn on image.
-    return tile2pixel(coord, zoom, tile_range)
-
-
-def tile2pixel(xy, zoom, tile_range):
-    """Convert Z/X/Y tile to map's X-Y coordinates"""
-    # That's all, no complex math involved. Rendering bug might be somewhere else.
-    xmin, xmax, ymin, ymax, tile_offset = tile_range
-    # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]), round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]))
-    return coord
-
-
 def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     errorlog = []
     for note in notes:
         # TODO: Unify coordinate conversion functions.
-        coord = wgs2pixel(note, tile_range, frag)
+        coord = utils.wgs2pixel(note, tile_range, frag)
         # print(coord)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
@@ -1364,7 +1339,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     len_colors = len(element_colors)
     for seg_num in range(len(render_queue)):
         for i in range(len(render_queue[seg_num])):
-            render_queue[seg_num][i] = wgs2pixel(render_queue[seg_num][i], tile_range, frag)
+            render_queue[seg_num][i] = utils.wgs2pixel(render_queue[seg_num][i], tile_range, frag)
         # Draw segment onto image
         color = element_colors[seg_num % len_colors]
         draw_line(render_queue[seg_num], draw, color)
@@ -1385,7 +1360,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     filename = config["map_save_file"].format(t=time.time())
     if True:
         draw_node((640.0, 640.0), draw, "#088")
-        coord = wgs2pixel((frag[1], frag[2]), tile_range, frag)
+        coord = utils.wgs2pixel((frag[1], frag[2]), tile_range, frag)
         print("Map alignment error: ", coord[0] - 640, coord[1] - 640)
         draw_node(coord, draw, "#bb0")
         print(640, 640, " ", *coord)

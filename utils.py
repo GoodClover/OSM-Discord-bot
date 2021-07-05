@@ -88,3 +88,29 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
         return (xtile, n - 1)
     ytile = (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n
     return (xtile, max(min(n - 1, ytile), 0))
+
+
+def wgs2pixel(
+    xy: tuple[float | int, float | int],
+    tile_range: tuple[int, int, int, int, tuple[float, float]],
+    frag: tuple[int, float, float],
+):
+    """Convert geographical coordinates to X-Y coordinates to be used on map."""
+    # Tile range is calculated in get_image_tile_range
+    zoom, lat_deg, lon_deg = frag
+    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    # tile_offset - By how many tiles should tile grid shifted somewhere.
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
+    coord = deg2tile_float(xy[0], xy[1], zoom)
+    # Coord is now actual pixels, where line must be drawn on image.
+    return tile2pixel(coord, zoom, tile_range)
+
+
+def tile2pixel(xy, zoom, tile_range):
+    """Convert Z/X/Y tile to map's X-Y coordinates"""
+    # That's all, no complex math involved. Rendering bug might be somewhere else.
+    xmin, xmax, ymin, ymax, tile_offset = tile_range
+    # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
+    coord = (round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]), round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]))
+    return coord
+
