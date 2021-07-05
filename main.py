@@ -41,9 +41,12 @@ from dotenv import load_dotenv
 from PIL import Image
 from PIL import ImageDraw  # For drawing elements
 
-## SETUP ##
-# Regex
 import regexes
+from utils import *
+import utils
+from configuration import config, guild_ids
+
+## SETUP ##
 cached_files: set = set()  # Global set of saved filenames. If on_message fails, it will remove cached files in way similar to /googlebad.
 recent_googles: set = set()  # Set of unix timestamps.
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
@@ -57,29 +60,6 @@ command_history: dict = dict()  # Global per-user dictionary of sets to keep tra
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
-
-def load_config() -> None:
-    global config, guild_ids
-    # LINK - config.json
-    with open("config.json", "r", encoding="utf8") as file:
-        config = json.loads(file.read())
-    guild_ids = [int(x) for x in config["server_settings"].keys()]
-
-
-def save_config() -> None:
-    global config
-    # LINK - config.json
-    with open("config.json", "w", encoding="utf8") as file:
-        file.write(json.dumps(config, indent=4))
-
-
-config: dict[str, Any] = {}
-guild_ids: list[int] = []
-load_config()
-
-### Rate-limiting ###
-config["rate_limit"]["element_count_exp"] = round(math.log(config["rate_limit"]["max_calls"], config["rate_limit"]["max_elements"]), 2)  # 1.17
-
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
@@ -120,9 +100,6 @@ slash = SlashCommand(client, sync_commands=True)
 
 
 ## UTILS ##
-from utils import *
-import utils
-
 def check_rate_limit(user, extra=0):
     # Sorry for no typehints, i don't know what types to have
     tnow = round(time.time(), 1)
