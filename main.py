@@ -953,53 +953,6 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
     await first_msg.edit(content=f'Getting image… Done[!](<{utils.msg_to_link(img_msg)}> "Link to message with image") :map:')
 
 
-def frag_to_bits(URL: str) -> tuple[int, float, float]:
-    matches = re.findall(regexes.MAP_FRAGEMT_CAPTURING, URL)
-    if len(matches) != 1:
-        raise ValueError("Invalid map fragment URL.")
-    zoom, lat, lon = matches[0]
-    return int(zoom), float(lat), float(lon)
-
-
-def bits_to_frag(match: tuple[int, float, float]) -> str:
-    zoom, lat, lon = match
-    return f"#map={zoom}/{lat}/{lon}"
-
-
-def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
-    # Previously this function was same as deg2tile_float, but output was rounded down.
-    # Rounded in this way as type checher was throwing a fit at map() having unknown length
-    x, y = deg2tile_float(lat_deg, lon_deg, zoom)
-    return int(x), int(y)
-
-
-def tile2deg(zoom: int, x: int, y: int) -> tuple[float, float]:
-    """Get top-left coordinate of a tile."""
-    lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
-    lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
-    lat = lat_rad * 180 / math.pi
-    # Handling latitude out of range is not necessary
-    # longitude maps linearly to map, so we simply scale:
-    lng = -180 + (360 * x / (2 ** zoom) % 360)
-    return (lat, lng)
-
-
-def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, float]:
-    # This is not really supposed to work, but it works.
-    # By removing rounding down from deg2tile function, we can estimate
-    # position where to draw coordinates during element export.
-    lat_rad = math.radians(lat_deg)
-    n = 2 ** zoom
-    xtile = (lon_deg + 180.0) / 360 * n
-    # Sets safety bounds on vertical tile range.
-    if lat_deg >= 89:
-        return (xtile, 0)
-    if lat_deg <= -89:
-        return (xtile, n - 1)
-    ytile = (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n
-    return (xtile, max(min(n - 1, ytile), 0))
-
-
 async def elms_to_render(
     elem_type,
     elem_id,
@@ -1224,15 +1177,15 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     zoom_x = int(math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"])))
     center_lon = delta_lon / 2 + min_lon
     zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (deg2tile(min_lat, 0, zoom_y)[1] - deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"]:
+    while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"]:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, config["rendering"]["max_zoom"])
-    tile_y_min = deg2tile_float(max_lat, 0, zoom)[1]
-    tile_y_max = deg2tile_float(min_lat, 0, zoom)[1]
+    tile_y_min = utils.deg2tile_float(max_lat, 0, zoom)[1]
+    tile_y_max = utils.deg2tile_float(min_lat, 0, zoom)[1]
     print(zoom, center_lon)
     if zoom < 10:
         # At low zoom levels and high latitudes, mercator's distortion must be accounted
-        center_lat = round(tile2deg(zoom, 0, (tile_y_max + tile_y_min) / 2)[0], 5)
+        center_lat = round(utils.tile2deg(zoom, 0, (tile_y_max + tile_y_min) / 2)[0], 5)
     else:
         center_lat = (max_lat - min_lat) / 2 + min_lat
     print(center_lat, min_lat, max_lat)
@@ -1241,7 +1194,7 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
-    center_x, center_y = deg2tile_float(lat_deg, lon_deg, zoom)
+    center_x, center_y = utils.deg2tile_float(lat_deg, lon_deg, zoom)
     xmin, xmax = int(center_x - config["rendering"]["tiles_x"] / 2), int(center_x + config["rendering"]["tiles_x"] / 2)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     if config["rendering"]["tiles_x"] % 2 == 0:
@@ -1359,7 +1312,7 @@ def wgs2pixel(
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
-    coord = deg2tile_float(xy[0], xy[1], zoom)
+    coord = utils.deg2tile_float(xy[0], xy[1], zoom)
     # Coord is now actual pixels, where line must be drawn on image.
     return tile2pixel(coord, zoom, tile_range)
 
@@ -1399,7 +1352,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # Inputs:   Cluster - PIL image
     #           render_queue - [[(lat, lon), ...], ...]
     #           frag  - zoom, lat, lon used  for cluster rendering input.
-    # Renderer requires epsg 3587 crs converter. Implemented in deg2tile_float.
+    # Renderer requires epsg 3587 crs converter. Implemented in utils.deg2tile_float.
     # Use solution similar to get_image_cluster, but use deg2tile_float function to get xtile/ytile.
     # I think tile calculation should be separate from get_image_cluster.
     # tile_offset - By how many tiles should tile grid shifted somewhere.
@@ -1686,7 +1639,7 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")
-            zoom, lat, lon = frag_to_bits(map_frag)
+            zoom, lat, lon = utils.frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
             files.append(File(filename))
