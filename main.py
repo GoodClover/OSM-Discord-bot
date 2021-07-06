@@ -166,6 +166,10 @@ def str_to_date(text: str, suffix: str = "Z") -> datetime:
     return datetime.strptime(text, "%Y-%m-%dT%H:%M:%S" + suffix)
 
 
+def date_to_mention(date: datetime) -> str:
+    return f"<t:{int(date.timestamp())}>"
+
+
 def sanitise(text: str) -> str:
     """Make user input safe to just copy."""
     text = text.replace("@", "�")
@@ -721,8 +725,8 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     if "info" in extras:
         embed.add_field(name="Comments", value=changeset["comments_count"])
         embed.add_field(name="Changes", value=changeset["changes_count"])
-        embed.add_field(name="Created", value=changeset["created_at"])
-        embed.add_field(name="Closed", value=changeset["closed_at"])
+        embed.add_field(name="Created", value=date_to_mention(str_to_date(changeset["created_at"])))
+        embed.add_field(name="Closed", value=date_to_mention(str_to_date(changeset["closed_at"])))
 
         if "tags" in changeset:
             if "source" in changeset["tags"]:
@@ -752,7 +756,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
                         map(
                             lambda x: "> "
                             + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
-                            + f"\n*- {x['user']} on {x['date'][:16].replace('T',' ')}*",
+                            + f"\n*- {x['user']} on {date_to_mention(str_to_date( x['date']))}*",
                             changeset["discussion"],
                         )
                     )
@@ -862,9 +866,9 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     #### Fields ####
     if "info" in extras:
         embed.add_field(name="Comments", value=str(len(note["properties"]["comments"])))
-        embed.add_field(name="Created", value=note["properties"]["date_created"])
+        embed.add_field(name="Created", value=date_to_mention(str_to_date(note["properties"]["date_created"])))
         if ["closed_at"] in note["properties"]["closed_at"]:
-            embed.add_field(name="Closed", value=note["properties"]["closed_at"])
+            embed.add_field(name="Closed", value=date_to_mention(str_to_date(note["properties"]["closed_at"])))
 
     if "discussion" in extras:
         if note["properties"]["comments"]:
@@ -875,7 +879,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
                         map(
                             lambda x: "> "
                             + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
-                            + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*",
+                            + f"\n*- {x['user']} {x['action']} on {date_to_mention(str_to_date(x['date']))}*",
                             note["properties"]["comments"],
                         )
                     )
@@ -1011,7 +1015,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
         embed.add_field(name="Changesets", value=user["changesets"]["count"])
         embed.add_field(name="Traces", value=user["traces"]["count"])
         embed.add_field(name="Contributor Terms", value="Agreed" if user["contributor_terms"]["agreed"] else "Unknown")
-        embed.add_field(name="User since", value=user["account_created"][:10])
+        embed.add_field(name="User since", value=date_to_mention(str_to_date(user["account_created"])))
         if user["blocks"]["received"]["count"] > 0:
             embed.add_field(
                 name="Blocks",
@@ -1916,7 +1920,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
     sugg_msg = await suggestion_chanel.send(
         f"""
 __**New suggestion posted**__
-By: <@!{ctx.author.id}>
+By: <@!{ctx.author.id}>, {date_to_mention(datetime.now())}
 > {suggestion}
 
 Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {config['emoji']['vote_no']}.
@@ -1998,7 +2002,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\n__**Voting closed**__ by {user_to_mention(ctx.author)}.\n"
+        + f"\n\n__**Voting closed**__ by {user_to_mention(ctx.author)}, {date_to_mention(datetime.now())}.\n"
         + f"Result: **{sanitise(result)}**\n"
         + f"Voting closed with: {votes['yes']} {config['emoji']['vote_yes']}"
         + f", {votes['abstain']} {config['emoji']['vote_abstain']}"
