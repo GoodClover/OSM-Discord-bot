@@ -58,6 +58,7 @@
         "left": "←",
         "right": "→",
         "cancel_utf": "✘",
+        "bot": "🤖",
         "sirens": "🚨"
     },
     "server_settings": {
