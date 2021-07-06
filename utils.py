@@ -114,3 +114,20 @@ def tile2pixel(xy, zoom, tile_range):
     coord = (round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]), round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]))
     return coord
 
+
+def format_discussions(conversation_json):
+    # Originally this was monster-lambda used by changesets and notes discussion processing
+    if not conversation_json:
+        return "*No comments*\n\n"
+    comments=[]
+    for comment in conversation_json:
+        # Remove excessive whitespace and duplicate rows, add quote markdown to each line.
+        formatted_comment = "> " + re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
+        # TODO: Add some formatting handling due to markdown/html
+        if 'action' in comment:
+            formatted_footer = f"\n*- {comment['user']} {comment['action'] on {comment['date'][:16].replace('T',' ')}*"
+        else:
+            formatted_footer = f"\n*- {comment['user']} on {comment['date'][:16].replace('T',' ')}*"
+        comments.append(formatted_comment + formatted_footer)
+    return "\n\n".join(comments) + "\n\n"
+

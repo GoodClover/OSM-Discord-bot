@@ -645,23 +645,8 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
             embed.add_field(name="Tags", value="*(no tags)*", inline=False)
     # ?include_discussion=true
     if "discussion" in extras:
-        if changeset["comments_count"] > 0:
-            # Example: *- User opened on 2020-04-14 08:00*
-            embed.description += (
-                "\n\n".join(
-                    list(
-                        map(
-                            lambda x: "> "
-                            + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
-                            + f"\n*- {x['user']} on {x['date'][:16].replace('T',' ')}*",
-                            changeset["discussion"],
-                        )
-                    )
-                )
-                + "\n\n"
-            )
-        else:
-            embed.description += "*No comments*\n\n"
+        # Example: *- User opened on 2020-04-14 08:00*
+        embed.description += utils.format_discussions(changeset["discussion"])
     if len(embed.description) > 1980:
         embed.description = embed.description[:1970].strip() + "…\n\n"
     embed.description += f"[OSMCha](https://osmcha.org/changesets/{changeset['id']})"
@@ -768,23 +753,8 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
             embed.add_field(name="Closed", value=note["properties"]["closed_at"])
 
     if "discussion" in extras:
-        if note["properties"]["comments"]:
-            # Example: *- User opened on 2020-04-14 08:00*
-            embed.description += (
-                "\n\n".join(
-                    list(
-                        map(
-                            lambda x: "> "
-                            + x["text"].strip().replace("\n\n", "\n").replace("\n", "\n> ")
-                            + f"\n*- {x['user']} {x['action']} on {x['date'][:16]}*",
-                            note["properties"]["comments"],
-                        )
-                    )
-                )
-                + "\n\n"
-            )
-        else:
-            embed.description += "*No comments*\n\n"
+        # Example: *- User opened on 2020-04-14 08:00*
+        embed.description += utils.format_discussions(note["properties"]["comments"])
     if creator != "*Anonymous*":
         embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator}/notes)"
     return embed
