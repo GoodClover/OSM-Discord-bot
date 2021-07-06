@@ -1421,6 +1421,9 @@ async def on_message(msg: Message) -> None:
     if regexes.POTLATCH.findall(msg.clean_content):
         await msg.add_reaction(config["emoji"]["sirens"])
         await msg.add_reaction(config["emoji"]["potlatch"])
+    # When bot is mentioned
+    if "<@{client.user.id}>" in msg.raw_mentions or "<@!{client.user.id}>" in msg.raw_mentions:
+        await msg.add_reaction(config["emoji"]["bot"])
 
     #### Inline linking ####
     # Find matches
