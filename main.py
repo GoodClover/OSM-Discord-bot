@@ -98,23 +98,6 @@ client = Client(
 )
 slash = SlashCommand(client, sync_commands=True)
 
-
-## UTILS ##
-def check_rate_limit(user, extra=0):
-    # Sorry for no typehints, i don't know what types to have
-    tnow = round(time.time(), 1)
-    if user not in command_history:
-        command_history[user] = set()
-    # Extra is useful in case when user queries lot of elements in one query.
-    command_history[user].add(tnow + extra)
-    command_history[user] = set(filter(lambda x: x > tnow - config["rate_limit"]["time_period"], command_history[user]))
-    # print(user, command_history[user])
-    if len(command_history[user]) > config["rate_limit"]["max_calls"]:
-        return False
-    return True
-
-
-
 ## CLIENT ##
 
 
@@ -149,7 +132,7 @@ async def googlebad_command(ctx: SlashContext) -> None:
 # JOSM Tip
 @slash.slash(name="josmtip", description="Get a JOSM tip.", guild_ids=guild_ids)  # type: ignore
 async def josmtip_command(ctx: SlashContext) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     await ctx.send(random.choice(josm_tips))
@@ -158,7 +141,7 @@ async def josmtip_command(ctx: SlashContext) -> None:
 # Quota query
 @slash.slash(name="quota", description="Shows your spam limit.", guild_ids=guild_ids)  # type: ignore
 async def quota_command(ctx: SlashContext) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
     tnow = time.time()
     msg = "\n".join(
@@ -188,7 +171,7 @@ async def quota_command(ctx: SlashContext) -> None:
     ],
 )  # type: ignore
 async def taginfo_command(ctx: SlashContext, tag: str) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     split_tag = tag.replace("`", "").split("=", 1)
@@ -313,7 +296,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
     ],
 )  # type: ignore
 async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str = "") -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     extras_list = [e.strip() for e in extras.lower().split(",")]
@@ -338,7 +321,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     if "map" in extras_list:
         await ctx.defer()
         render_queue = await elms_to_render(elm_type, elm_id)
-        check_rate_limit(ctx.author_id, extra=len(render_queue) ** config["rate_limit"]["rendering_rate_exp"])
+        utils.check_rate_limit(ctx.author_id, extra=len(render_queue) ** config["rate_limit"]["rendering_rate_exp"])
         bbox = get_render_queue_bounds(render_queue)
         zoom, lat, lon = calc_preview_area(bbox)
         cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
@@ -522,7 +505,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = "") -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     extras_list = [e.strip() for e in extras.lower().split(",")]
@@ -542,7 +525,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     if "map" in extras_list:
         await ctx.defer()
         render_queue = changeset["geometry"]
-        check_rate_limit(ctx.author_id)
+        utils.check_rate_limit(ctx.author_id)
         bbox = get_render_queue_bounds(render_queue)
         zoom, lat, lon = calc_preview_area(bbox)
         cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
@@ -675,7 +658,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     extras_list = [e.strip() for e in extras.lower().split(",")]
@@ -781,7 +764,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def user_command(ctx: SlashContext, username: str, extras: str = "") -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     extras_list = [e.strip() for e in extras.lower().split(",")]
@@ -899,7 +882,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
     ],
 )  # type: ignore
 async def showmap_command(ctx: SlashContext, url: str) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     try:
@@ -1461,7 +1444,7 @@ async def on_message(msg: Message) -> None:
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
     author_id = msg.author.id
-    check_rate_limit(author_id, -config["rate_limit"]["time_period"] - 1)  # Refresh command history
+    utils.check_rate_limit(author_id, -config["rate_limit"]["time_period"] - 1)  # Refresh command history
     if queried_elements_count == 0:
         return
     elif queried_elements_count > config["rate_limit"]["max_elements"] - len(command_history[author_id]):
@@ -1484,7 +1467,7 @@ async def on_message(msg: Message) -> None:
     # User quota is checked after they confirmed element lookup.
     for i in range(int(queried_elements_count ** config["rate_limit"]["element_count_exp"]) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
-        rating = check_rate_limit(author_id, round(i ** config["rate_limit"]["rate_extra_exp"], 2))
+        rating = utils.check_rate_limit(author_id, round(i ** config["rate_limit"]["rate_extra_exp"], 2))
         # if not rating:
         #     return
     async with msg.channel.typing():
@@ -1542,12 +1525,12 @@ async def on_message(msg: Message) -> None:
         time_spent = round(time.time() - msg_arrived - (wait_for_user_end - wait_for_user_start), 3)
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
-            check_rate_limit(author_id, time_spent)
+            utils.check_rate_limit(author_id, time_spent)
         print(f"Script spent {time_spent} sec on downloading elements.")
         msg_arrived = time.time()
         if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
-            check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** config["rate_limit"]["rendering_rate_exp"])
+            utils.check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** config["rate_limit"]["rendering_rate_exp"])
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"{LOADING_EMOJI} Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
@@ -1618,7 +1601,7 @@ async def on_message(msg: Message) -> None:
         # msg_arrived actually means time since start of rendering
         if time_spent > 10:
             # Most direct way to assess difficulty of user's request.
-            check_rate_limit(author_id, time_spent)
+            utils.check_rate_limit(author_id, time_spent)
         print(f"Script spent {time_spent} sec on preparing output (render, embeds, files, errors).")
 
     # Clean up files
@@ -1659,7 +1642,7 @@ async def update_member_count(guild: Guild) -> None:
     ],
 )  # type: ignore
 async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:
@@ -1711,7 +1694,7 @@ Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {
     ],
 )  # type: ignore
 async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) -> None:
-    if not check_rate_limit(ctx.author_id):
+    if not utils.check_rate_limit(ctx.author_id):
         await ctx.send("You have hit the limiter.", hidden=True)
         return
     if not config["server_settings"][str(ctx.guild.id)]["suggestions_enabled"]:

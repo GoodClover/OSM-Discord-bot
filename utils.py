@@ -6,7 +6,11 @@ from datetime import datetime
 from typing import Union
 from discord import Guild
 from discord import Member
+from configuration import config, guild_ids
 ## UTILS ##
+
+command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting 
+
 def is_powerful(member: Member, guild: Guild) -> bool:
     return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
 
@@ -131,4 +135,18 @@ def format_discussions(conversation_json):
             formatted_footer = f"\n*- {comment['user']} on {comment['date'][:16].replace('T',' ')}*"
         comments.append(formatted_comment + formatted_footer)
     return "\n\n".join(comments) + "\n\n"
+
+
+def check_rate_limit(user, extra=0):
+    # Sorry for no typehints, i don't know what types to have
+    tnow = round(time.time(), 1)
+    if user not in command_history:
+        command_history[user] = set()
+    # Extra is useful in case when user queries lot of elements in one query.
+    command_history[user].add(tnow + extra)
+    command_history[user] = set(filter(lambda x: x > tnow - config["rate_limit"]["time_period"], command_history[user]))
+    # print(user, command_history[user])
+    if len(command_history[user]) > config["rate_limit"]["max_calls"]:
+        return False
+    return True
 
