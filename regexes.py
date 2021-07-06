@@ -13,10 +13,11 @@ USER_INLINE = rf"{SS}user\/[\w\-_]+{SE}"
 # FIXME: For some reason this allows stuff after the end of the map fragment.
 MAP_FRAGMENT_INLINE = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 MAP_FRAGEMT_CAPTURING = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
+POTLATCH = r"(ha(ve|d|s) )?us(ed|ing|es?) potlatch"
 ELM_INLINE = re.compile(ELM_INLINE, re.IGNORECASE)
 CHANGESET_INLINE = re.compile(CHANGESET_INLINE, re.IGNORECASE)
 NOTE_INLINE = re.compile(NOTE_INLINE, re.IGNORECASE)
 USER_INLINE = re.compile(USER_INLINE, re.IGNORECASE)
 MAP_FRAGMENT_INLINE = re.compile(MAP_FRAGMENT_INLINE, re.IGNORECASE)
 INTEGER = re.compile(POS_INT)
-POTLATCH = "use potlatch"
+POTLATCH = re.compile(POTLATCH, re.IGNORECASE)

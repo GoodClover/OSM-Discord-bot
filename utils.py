@@ -4,6 +4,7 @@
 import math
 from datetime import datetime
 from typing import Union
+from discord import Guild
 from discord import Member
 ## UTILS ##
 def is_powerful(member: Member, guild: Guild) -> bool:
@@ -125,7 +126,7 @@ def format_discussions(conversation_json):
         formatted_comment = "> " + re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
         # TODO: Add some formatting handling due to markdown/html
         if 'action' in comment:
-            formatted_footer = f"\n*- {comment['user']} {comment['action'] on {comment['date'][:16].replace('T',' ')}*"
+            formatted_footer = f"\n*- {comment['user']} {comment['action']} on {comment['date'][:16].replace('T',' ')}*"
         else:
             formatted_footer = f"\n*- {comment['user']} on {comment['date'][:16].replace('T',' ')}*"
         comments.append(formatted_comment + formatted_footer)
