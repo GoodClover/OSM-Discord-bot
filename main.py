@@ -1140,7 +1140,7 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
     # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
-    print(list(map(lambda x: round(x, 4), queue_bounds)))
+    print("Elements bounding box:",*list(map(lambda x: round(x, 4), queue_bounds)))
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
