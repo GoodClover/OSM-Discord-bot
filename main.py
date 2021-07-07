@@ -98,9 +98,6 @@ client = Client(
 )
 slash = SlashCommand(client, sync_commands=True)
 
-def date_to_mention(date: datetime) -> str:
-    return f"<t:{int(date.timestamp())}>"
-
 
 ## CLIENT ##
 
@@ -609,8 +606,8 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     if "info" in extras:
         embed.add_field(name="Comments", value=changeset["comments_count"])
         embed.add_field(name="Changes", value=changeset["changes_count"])
-        embed.add_field(name="Created", value=date_to_mention(str_to_date(changeset["created_at"])))
-        embed.add_field(name="Closed", value=date_to_mention(str_to_date(changeset["closed_at"])))
+        embed.add_field(name="Created", value=utils.date_to_mention(utils.str_to_date(changeset["created_at"])))
+        embed.add_field(name="Closed", value=utils.date_to_mention(utils.str_to_date(changeset["closed_at"])))
 
         if "tags" in changeset:
             if "source" in changeset["tags"]:
@@ -735,9 +732,9 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     #### Fields ####
     if "info" in extras:
         embed.add_field(name="Comments", value=str(len(note["properties"]["comments"])))
-        embed.add_field(name="Created", value=date_to_mention(str_to_date(note["properties"]["date_created"])))
+        embed.add_field(name="Created", value=utils.date_to_mention(utils.str_to_date(note["properties"]["date_created"])))
         if ["closed_at"] in note["properties"]["closed_at"]:
-            embed.add_field(name="Closed", value=date_to_mention(str_to_date(note["properties"]["closed_at"])))
+            embed.add_field(name="Closed", value=utils.date_to_mention(utils.str_to_date(note["properties"]["closed_at"])))
 
     if "discussion" in extras:
         # Example: *- User opened on 2020-04-14 08:00*
@@ -861,7 +858,7 @@ def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
         embed.add_field(name="Changesets", value=user["changesets"]["count"])
         embed.add_field(name="Traces", value=user["traces"]["count"])
         embed.add_field(name="Contributor Terms", value="Agreed" if user["contributor_terms"]["agreed"] else "Unknown")
-        embed.add_field(name="User since", value=date_to_mention(str_to_date(user["account_created"])))
+        embed.add_field(name="User since", value=utils.date_to_mention(utils.str_to_date(user["account_created"])))
         if user["blocks"]["received"]["count"] > 0:
             embed.add_field(
                 name="Blocks",
@@ -1666,7 +1663,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
     sugg_msg = await suggestion_chanel.send(
         f"""
 __**New suggestion posted**__
-By: <@!{ctx.author.id}>, {date_to_mention(datetime.now())}
+By: <@!{ctx.author.id}>, {utils.date_to_mention(datetime.now())}
 > {suggestion}
 
 Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {config['emoji']['vote_no']}.
@@ -1748,9 +1745,8 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 
     sugg_msg = await msg.edit(
         content=msg.content.split("\n\n")[0]
-        + f"\n\n__**Voting closed**__ by {utils.user_to_mention(ctx.author)}.\n"
+        + f"\n\n__**Voting closed**__ by {utils.user_to_mention(ctx.author)}, {utils.date_to_mention(datetime.now())}.\n"
         + f"Result: **{utils.sanitise(result)}**\n"
-        + f"\n\n__**Voting closed**__ by {user_to_mention(ctx.author)}, {date_to_mention(datetime.now())}.\n"
         + f"Voting closed with: {votes['yes']} {config['emoji']['vote_yes']}"
         + f", {votes['abstain']} {config['emoji']['vote_abstain']}"
         + f", {votes['no']} {config['emoji']['vote_no']}"

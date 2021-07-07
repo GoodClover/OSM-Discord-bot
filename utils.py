@@ -48,6 +48,10 @@ def user_to_mention(user: Member) -> str:
     return f"<@{user.id}>"
 
 
+def date_to_mention(date: datetime) -> str:
+    return f"<t:{int(date.timestamp())}>"
+
+
 def frag_to_bits(URL: str) -> tuple[int, float, float]:
     matches = re.findall(regexes.MAP_FRAGEMT_CAPTURING, URL)
     if len(matches) != 1:
@@ -130,7 +134,7 @@ def format_discussions(conversation_json):
         formatted_comment = "> " + re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
         # TODO: Add some formatting handling due to markdown/html
         if 'action' in comment:
-            formatted_footer = f"\n*- {comment['user']} {comment['action']} on {comment['date'][:16].replace('T',' ')}*"
+            formatted_footer = f"\n*- {comment['user']} {comment['action']} on {date_to_mention(str_to_date( x['date']))}*"
         else:
             formatted_footer = f"\n*- {comment['user']} on {comment['date'][:16].replace('T',' ')}*"
         comments.append(formatted_comment + formatted_footer)
