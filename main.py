@@ -1451,7 +1451,8 @@ async def on_message(msg: Message) -> None:
     if queried_elements_count == 0:
         return
     elif queried_elements_count > config["rate_limit"]["max_elements"] - len(command_history[author_id]):
-        # If there are too many elements, just ignore.
+        # If there are too many elements, just ignore. Sending hidden normal messages is unsupported.
+        # msg.channel.send("You can't query that many elements.", hidden=True)
         return
 
     ask_confirmation = False
