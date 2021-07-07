@@ -1,13 +1,12 @@
-#Colour handling
-if True:
-colour_names_json_url = "https://raw.githubusercontent.com/bahamas10/css-color-names/master/css-color-names.json"
-RAL_url = "https://raw.githubusercontent.com/smaddy/ral-json/main/ral_pretty.json"
+# Colour handling
+# This module is meant to be used in future when rendering function gets support for reading colour tags.
 import requests
 import colorsys, json
+from configuration import config
 
 def get_RAL():
     RAL=dict()
-    data=requests.get(RAL_url).json()
+    data=requests.get(config["rendering"]["RAL_url"]).json()
     for code in data:
         for name in data[code]["names"]:
             col=''.join(data[code]["names"][name].lower().split())
@@ -19,7 +18,7 @@ def get_RAL():
         RAL["ral"+code] = data[code]["color"]["hex"].lower()
     return RAL
 
-colours = requests.get(colour_names_json_url).json()
+colours = requests.get(config["rendering"]["colour_names_json_url"]).json()
 RAL = get_RAL()
 
 
