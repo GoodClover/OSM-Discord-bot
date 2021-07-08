@@ -42,8 +42,8 @@ from PIL import Image
 from PIL import ImageDraw  # For drawing elements
 
 import regexes
-from utils import *
 import utils
+from utils import *  # Backup for cases when utils.* prefix was not added yet.
 from configuration import config, guild_ids
 
 ## SETUP ##

@@ -3,10 +3,14 @@
 import requests
 import colorsys, json
 from configuration import config
+colnames_url = config["rendering"]["colour_names_json_url"]
+RAL_url = config["rendering"]["RAL_url"]
+# colnames_url="https://raw.githubusercontent.com/bahamas10/css-color-names/master/css-color-names.json"
+# RAL_url="https://raw.githubusercontent.com/smaddy/ral-json/main/ral_pretty.json"
 
 def get_RAL():
     RAL=dict()
-    data=requests.get(config["rendering"]["RAL_url"]).json()
+    data=requests.get(RAL_url).json()
     for code in data:
         for name in data[code]["names"]:
             col=''.join(data[code]["names"][name].lower().split())
@@ -18,7 +22,7 @@ def get_RAL():
         RAL["ral"+code] = data[code]["color"]["hex"].lower()
     return RAL
 
-colours = requests.get(config["rendering"]["colour_names_json_url"]).json()
+colours = requests.get(colnames_url).json()
 RAL = get_RAL()
 
 
@@ -72,7 +76,10 @@ def is_hexcode(value):
 def try_parse_colour(color_value):
     # color_value is str
     # Returns string in format #RRGGBB  OR None in case resolving text to hex failed.
-    color_value = color_value.strip('#').strip().lower().replace('_','-').replace('/','-').replace(' ','-').strip('-')
+    color_value = color_value.strip('#').strip().lower()
+    for char_to_replace in "-_/ ":
+        color_value=color_value.replace(char_to_replace,'-')
+    color_value=color_value.strip('-')
     key_col = color_value.replace('-','')
     if key_col in colours:
         return colours[key_col]
@@ -122,4 +129,8 @@ def try_parse_colour(color_value):
         # "rgb(90,80,75)" and "rgb(114, 200, 251);"
         rgb = json.loads(key_col.strip(";")[3:].replace('(', '[').replace(')', ']'))
         return '#'+''.join(list(map(lambda x:"{:02x}".format(round(x)), rgb)))
-    print(f"Hex lookup for {color_value} failed.")
+    # print(f"Hex lookup for {color_value} failed.")
+
+#with open(r"..\geo\top_3000_colors.txt", "r", encoding="utf8") as f:
+#    hmm=f.read().split('\n')
+#    e=list(filter(lambda x: not try_parse_colour(x),hmm))

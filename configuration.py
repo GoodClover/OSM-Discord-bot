@@ -1,6 +1,6 @@
 # /bin/python3
 # Configuration loader
-import json
+import json, math
 from typing import Any
 def load_config() -> None:
     global config, guild_ids
@@ -16,8 +16,9 @@ def save_config() -> None:
     with open("config.json", "w", encoding="utf8") as file:
         file.write(json.dumps(config, indent=4))
 
-config: dict[str, Any] = {}
-guild_ids: list[int] = []
+# SyntaxError: annotated name 'config' can't be global
+config=dict()  # : dict[str, Any] = {}
+guild_ids=list()  # : list[int] = []
 load_config()
 
 ### Rate-limiting ###
