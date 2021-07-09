@@ -63,7 +63,7 @@ element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
-INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:  
+INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:
 IMAGE_EMOJI = config["emoji"]["image"]  # :frame_photo:
 EMBEDDED_EMOJI = config["emoji"]["embedded"]  # :bed:
 CANCEL_EMOJI = config["emoji"]["cancel"]  # :x:

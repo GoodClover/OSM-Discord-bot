@@ -15,9 +15,9 @@ closed_note_icon_size = closed_note_icon.size
 # Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
 
 
-#class RenderQueue:
+# class RenderQueue:
 
-#class RenderSegment:
+# class RenderSegment:
 
 
 def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
@@ -51,7 +51,6 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     # with elms_to_render('relation','908054')
     # Result:  15458 vs 6564
     return reduced
-
 
 
 def get_render_queue_bounds(
@@ -101,14 +100,18 @@ def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[
     # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
     # Finds map area, that should contain all elements.
     # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
-    print("Elements bounding box:",*list(map(lambda x: round(x, 4), queue_bounds)))
+    print("Elements bounding box:", *list(map(lambda x: round(x, 4), queue_bounds)))
     min_lat, max_lat, min_lon, max_lon = queue_bounds
     delta_lat = max_lat - min_lat
     delta_lon = max_lon - min_lon
-    zoom_x = int(math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"])))
+    zoom_x = int(
+        math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"]))
+    )
     center_lon = delta_lon / 2 + min_lon
     zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"]:
+    while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
+        "tiles_y"
+    ] - 2 * config["rendering"]["tile_margin_y"]:
         zoom_y -= 1  # Bit slow and dumb approach
     zoom = min(zoom_x, zoom_y, config["rendering"]["max_zoom"])
     tile_y_min = utils.deg2tile_float(max_lat, 0, zoom)[1]
@@ -137,13 +140,20 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
     print("Tile offset calculation")
-    print(center_x, config["rendering"]["tiles_x"], config["rendering"]["tiles_x"] % 2, (config["rendering"]["tiles_x"] % 2) / 2, (center_x + (config["rendering"]["tiles_x"] % 2) / 2))
-    tile_offset = ((center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1, (center_y + (config["rendering"]["tiles_x"] % 2) / 2) % 1)
+    print(
+        center_x,
+        config["rendering"]["tiles_x"],
+        config["rendering"]["tiles_x"] % 2,
+        (config["rendering"]["tiles_x"] % 2) / 2,
+        (center_x + (config["rendering"]["tiles_x"] % 2) / 2),
+    )
+    tile_offset = (
+        (center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
+        (center_y + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
+    )
     # tile_offset = 0,0
     print("Offset:", tile_offset)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
-
-
 
 
 def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
@@ -255,5 +265,3 @@ def merge_segments(segments: list[list[tuple[float, float]]]) -> list[list[tuple
     #     seg_ends[last] = len(segments) - 1
     #     seg_ends[first] = len(segments) - 1
     return segments
-
-

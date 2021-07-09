@@ -1,15 +1,19 @@
 # /bin/python3
 # Utility functions, such as coordinate calculations or data transformations.
-
 import math
 from datetime import datetime
 from typing import Union
+
 from discord import Guild
 from discord import Member
-from configuration import config, guild_ids
+
+from configuration import config
+from configuration import guild_ids
+
 ## UTILS ##
 
-command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting 
+command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting
+
 
 def is_powerful(member: Member, guild: Guild) -> bool:
     return guild.get_role(config["server_settings"][str(guild.id)]["power_role"]) in member.roles
@@ -120,7 +124,10 @@ def tile2pixel(xy, zoom, tile_range):
     # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    coord = (round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]), round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]))
+    coord = (
+        round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]),
+        round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]),
+    )
     return coord
 
 
@@ -128,13 +135,15 @@ def format_discussions(conversation_json):
     # Originally this was monster-lambda used by changesets and notes discussion processing
     if not conversation_json:
         return "*No comments*\n\n"
-    comments=[]
+    comments = []
     for comment in conversation_json:
         # Remove excessive whitespace and duplicate rows, add quote markdown to each line.
         formatted_comment = "> " + re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
         # TODO: Add some formatting handling due to markdown/html
-        if 'action' in comment:
-            formatted_footer = f"\n*- {comment['user']} {comment['action']} on {date_to_mention(str_to_date( x['date']))}*"
+        if "action" in comment:
+            formatted_footer = (
+                f"\n*- {comment['user']} {comment['action']} on {date_to_mention(str_to_date( x['date']))}*"
+            )
         else:
             formatted_footer = f"\n*- {comment['user']} on {comment['date'][:16].replace('T',' ')}*"
         comments.append(formatted_comment + formatted_footer)
@@ -153,4 +162,3 @@ def check_rate_limit(user, extra=0):
     if len(command_history[user]) > config["rate_limit"]["max_calls"]:
         return False
     return True
-
