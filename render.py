@@ -9,6 +9,11 @@ open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
 # Rendering system may need a rewrite, that focuses on object-oriented approach.
+# New class should enable easy all-in-one solution, where script can append elements waiting to be rendered.
+# Ideally there would be parallel process, that performs network requests, but that's far future.
+# What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
+# Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
+
 
 #class RenderQueue:
 

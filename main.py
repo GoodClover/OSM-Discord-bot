@@ -1098,8 +1098,8 @@ async def on_message(msg: Message) -> None:
     if regexes.POTLATCH.findall(msg.clean_content):
         await msg.add_reaction(config["emoji"]["sirens"])
         await msg.add_reaction(config["emoji"]["potlatch"])
-    # When bot is mentioned
-    if "<@{client.user.id}>" in msg.raw_mentions or "<@!{client.user.id}>" in msg.raw_mentions:
+    # When bot is mentioned. Difference below is exclamation mark (!)
+    if f"<@{client.user.id}>" in msg.raw_mentions or f"<@!{client.user.id}>" in msg.raw_mentions:
         await msg.add_reaction(config["emoji"]["bot"])
 
     #### Inline linking ####
@@ -1107,19 +1107,10 @@ async def on_message(msg: Message) -> None:
     # elm[0] - element type (node/way/relation/changeset)
     # elm[1] - separator used
     # elm[2] - element ID
-    elms = [
-        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
-        for elm in regexes.ELM_INLINE.findall(msg.clean_content)
-    ]
-    changesets = [
-        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
-        for elm in regexes.CHANGESET_INLINE.findall(msg.clean_content)
-    ]
-    notes = [
-        (elm[0].lower(), tuple(regexes.INTEGER.findall(elm[2])), elm[1])
-        for elm in regexes.NOTE_INLINE.findall(msg.clean_content)
-    ]
-    users = [thing.split("/")[1] for thing in regexes.USER_INLINE.findall(msg.clean_content)]
+    elms = regexes.find_matches(regexes.ELM_INLINE, msg.clean_content)
+    changesets = regexes.find_matches(regexes.CHANGESET_INLINE, msg.clean_content)
+    notes = regexes.find_matches(regexes.NOTE_INLINE, msg.clean_content)
+    users = regexes.find_matches(regexes.USER_INLINE, msg.clean_content)
     map_frags = regexes.MAP_FRAGMENT_INLINE.findall(msg.clean_content)
 
     queried_elements_count = len(elms) + len(changesets) + len(users) + len(map_frags) + len(notes)
@@ -1443,7 +1434,7 @@ help_embeds: list[Embed] = []
 with open("HELP.md", "r") as file:
     for page in file.read().split("\n# "):
         title, image, body = page.split("\n", 2)
-        title = title.removeprefix("# ")  # split() dosen't remove it for the first one.
+        title = title.removeprefix("# ")  # split() doesn't remove it for the first one.
         embed = Embed(
             type="rich",
             title=title,
