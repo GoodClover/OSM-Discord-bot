@@ -63,13 +63,6 @@ element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
-res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
-closed_note_icon = Image.open(BytesIO(res.content))
-res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
-open_note_icon = Image.open(BytesIO(res.content))
-open_note_icon_size = open_note_icon.size
-closed_note_icon_size = closed_note_icon.size
-
 INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:  
 IMAGE_EMOJI = config["emoji"]["image"]  # :frame_photo:
 EMBEDDED_EMOJI = config["emoji"]["embedded"]  # :bed:
@@ -407,11 +400,7 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
     #### Image ####
     # * This would create significant stress to the OSM servers, so I don't reccomend it.
     # ! This doesn't work due to the OSM servers having some form of token check.
-    # img_url = (
-    #     "https://render.openstreetmap.org/cgi-bin/export?bbox="
-    #     f"{elm['lon']-0.001},{elm['lat']-0.001},{elm['lon']+0.001},{elm['lat']+0.001}"
-    #     "&scale=1800&format=png"
-    # )
+    # img_url = (  "https://render.openstreetmap.org/cgi-bin/export?bbox=" )
     # embed.set_image(url=img_url)
     # Image of element is handled separately.
 
@@ -542,27 +531,6 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     await ctx.send(embed=embed, file=file)
 
 
-def get_changeset(changeset_id: str | int, discussion: bool = False) -> dict:
-    """Shorthand for `get_elm("changeset", changeset_id)`"""
-    try:
-        discussion_suffix = ""
-        if discussion:
-            discussion_suffix = "?include_discussion=true"
-        changeset = get_elm("changeset", changeset_id, discussion_suffix)
-        changeset["geometry"] = [
-            [
-                (changeset["minlat"], changeset["minlon"]),
-                (changeset["minlat"], changeset["maxlon"]),
-                (changeset["maxlat"], changeset["maxlon"]),
-                (changeset["maxlat"], changeset["minlon"]),
-                (changeset["minlat"], changeset["minlon"]),
-            ]
-        ]
-        return changeset
-    except ValueError as error_message:
-        raise ValueError(error_message)
-
-
 def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
@@ -679,16 +647,6 @@ async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> Non
     await ctx.send(embed=note_embed(note, extras_list))
 
 
-def get_note(note_id: str | int) -> dict:
-    """Shorthand for get_elm didn't work"""
-    res = requests.get(config["api_url"] + f"api/0.6/notes/{note_id}.json")
-    try:
-        elm = res.json()
-    except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"Note `{note_id}` does not exist.")
-    return elm
-
-
 def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     embed = Embed()
     embed.type = "rich"
@@ -786,40 +744,6 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
 
     await ctx.defer()
     await ctx.send(embed=user_embed(user, extras_list))
-
-
-def get_id_from_username(username: str) -> int:
-    whosthat = requests.get(config["whosthat_url"] + "whosthat.php?action=names&q=" + username).json()
-    if len(whosthat) > 0:
-        return whosthat[0]["id"]
-    # Backup solution via changesets
-    res = requests.get(config["api_url"] + f"api/0.6/changesets/?display_name={username}").text
-    if res == "Object not found":
-        raise ValueError(f"User `{username}` does not exist.")
-    if "uid=" in res:
-        # +5 and -2 are used to isolate uid from `uid="123" `.
-        return res[res.find('uid="') + 5 : res.find('user="') - 2]
-    # Backup of a backup by using notes lookup.
-    res = requests.get(config["api_url"] + f"api/0.6/notes/search.json/?display_name={username}").json()
-    for feat in res["features"]:
-        for comm in feat["properties"]["comments"]:
-            try:
-                if comm["user"] == username:
-                    return str(comm["uid"])
-            except KeyError:
-                pass  # Encountered anonymous note
-    raise ValueError(f"User `{username}` does exist, but has no changesets nor notes.")
-
-
-def get_user(user_id: str | int) -> dict:
-    res = requests.get(config["api_url"] + f"api/0.6/user/{user_id}.json")
-
-    try:
-        user = res.json()["user"]
-    except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"User `{user_id}` not found")
-
-    return user
 
 
 def user_embed(user: dict, extras: Iterable[str] = []) -> Embed:
