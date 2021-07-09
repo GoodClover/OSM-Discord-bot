@@ -1,9 +1,10 @@
 # /bin/python3
-# Functions used for communicating with network services. Mainly getting elements 
+# Functions used for communicating with network services. Mainly getting elements
 # and maybe later servicing tiles and overpass queries (+caching) as well.
-
 import requests
-from configuration import config, guild_ids
+
+from configuration import config
+from configuration import guild_ids
 
 
 def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> dict:
@@ -14,11 +15,11 @@ def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> d
         suffix = "?include_discussion=true"
     if elm_type == "note" or elm_type == "notes":
         # Notes api is rather odd, as it has `noteS`, not `note`
-        elm_type="notes"
-    
+        elm_type = "notes"
+
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
-    if elm_type=="notes":
-        elm_type="note"
+    if elm_type == "notes":
+        elm_type = "note"
     code = res.status_code
     if code == 410:
         raise ValueError(f"{elm_type.capitalize()} `{elm_id}` has been deleted.")
@@ -33,12 +34,15 @@ def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> d
     elif elm_type == "changeset":
         try:
             elm = elm["elements"][0]
-            elm["geometry"] = [ [
+            elm["geometry"] = [
+                [
                     (elm["minlat"], elm["minlon"]),
                     (elm["minlat"], elm["maxlon"]),
                     (elm["maxlat"], elm["maxlon"]),
                     (elm["maxlat"], elm["minlon"]),
-                    (elm["minlat"], elm["minlon"]) ] ]
+                    (elm["minlat"], elm["minlon"]),
+                ]
+            ]
         except (IndexError, KeyError):
             raise ValueError(f"Changeset `{elm_id}` was not found.")
     elif elm_type == "user":
@@ -75,5 +79,3 @@ def get_id_from_username(username: str) -> int:
             except KeyError:
                 pass  # Encountered anonymous note
     raise ValueError(f"User `{username}` does exist, but has no changesets nor notes.")
-
-

@@ -1,7 +1,5 @@
 # /bin/python3
 # Functions with "old"-suffix or prefix.
-
-
 # This doesn't work correct.
 # def comma_every_three(text: str) -> str:
 #     return ",".join(re.findall("...", str(text)[::-1]))[::-1]
@@ -30,13 +28,22 @@ async def get_image_cluster_old(
     j = 0
     xmin, ymax = deg2tile(lat_deg, lon_deg, zoom)
     xmax, ymin = deg2tile(lat_deg + delta_lat, lon_deg + delta_long, zoom)
-    Cluster = Image.new("RGB", ((xmax - xmin + 1) * config["rendering"]["tile_w"] - 1, (ymax - ymin + 1) * config["rendering"]["tile_h"] - 1))
+    Cluster = Image.new(
+        "RGB",
+        ((xmax - xmin + 1) * config["rendering"]["tile_w"] - 1, (ymax - ymin + 1) * config["rendering"]["tile_h"] - 1),
+    )
     for xtile in range(xmin, xmax + 1):
         for ytile in range(ymin, ymax + 1):
             try:
                 res = requests.get(tile_url.format(zoom=zoom, x=xtile, y=ytile), headers=config["rendering"]["HEADERS"])
                 tile = Image.open(BytesIO(res.content))
-                Cluster.paste(tile, box=((xtile - xmin) * config["rendering"]["tile_w"], (ytile - ymin) * config["rendering"]["tile_h"]))
+                Cluster.paste(
+                    tile,
+                    box=(
+                        (xtile - xmin) * config["rendering"]["tile_w"],
+                        (ytile - ymin) * config["rendering"]["tile_h"],
+                    ),
+                )
                 i = i + 1
             except Exception as e:
                 print(e)
