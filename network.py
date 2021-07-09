@@ -6,20 +6,6 @@ import requests
 from configuration import config, guild_ids
 
 
-def get_elm_old(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
-    res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
-    code = res.status_code
-    if code == 410:
-        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` has been deleted.")
-    elif code == 404:
-        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` has never existed.")
-    try:
-        elm = res.json()["elements"][0]
-    except (json.decoder.JSONDecodeError, IndexError, KeyError):
-        raise ValueError(f"{elm_type.capitalize()} `{elm_id}` was not found.")
-    return elm
-
-
 def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> dict:
     # New, unified element query function.
     suffix = ""
