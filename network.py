@@ -1,6 +1,11 @@
 # /bin/python3
 # Functions used for communicating with network services. Mainly getting elements 
 # and maybe later servicing tiles and overpass queries (+caching) as well.
+
+import requests
+from configuration import config, guild_ids
+
+
 def get_elm_old(elm_type: str, elm_id: str | int, suffix: str = "") -> dict:
     res = requests.get(config["api_url"] + f"api/0.6/{elm_type}/{elm_id}.json" + suffix)
     code = res.status_code
@@ -48,7 +53,7 @@ def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> d
                     (elm["maxlat"], elm["maxlon"]),
                     (elm["maxlat"], elm["minlon"]),
                     (elm["minlat"], elm["minlon"]) ] ]
-        except ValueError as (IndexError, KeyError):
+        except (IndexError, KeyError):
             raise ValueError(f"Changeset `{elm_id}` was not found.")
     elif elm_type == "user":
         try:
