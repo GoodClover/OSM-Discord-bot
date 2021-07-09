@@ -43,11 +43,14 @@ from PIL import ImageDraw  # For drawing elements
 
 import regexes
 import utils
+from configuration import config
+from configuration import guild_ids
 from utils import *  # Backup for cases when utils.* prefix was not added yet.
-from configuration import config, guild_ids
 
 ## SETUP ##
-cached_files: set = set()  # Global set of saved filenames. If on_message fails, it will remove cached files in way similar to /googlebad.
+cached_files: set = (
+    set()
+)  # Global set of saved filenames. If on_message fails, it will remove cached files in way similar to /googlebad.
 recent_googles: set = set()  # Set of unix timestamps.
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
@@ -676,9 +679,13 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
     #### Fields ####
     if "info" in extras:
         embed.add_field(name="Comments", value=str(len(note["properties"]["comments"])))
-        embed.add_field(name="Created", value=utils.date_to_mention(utils.str_to_date(note["properties"]["date_created"])))
+        embed.add_field(
+            name="Created", value=utils.date_to_mention(utils.str_to_date(note["properties"]["date_created"]))
+        )
         if ["closed_at"] in note["properties"]["closed_at"]:
-            embed.add_field(name="Closed", value=utils.date_to_mention(utils.str_to_date(note["properties"]["closed_at"])))
+            embed.add_field(
+                name="Closed", value=utils.date_to_mention(utils.str_to_date(note["properties"]["closed_at"]))
+            )
 
     if "discussion" in extras:
         # Example: *- User opened on 2020-04-14 08:00*
@@ -814,7 +821,9 @@ async def showmap_command(ctx: SlashContext, url: str) -> None:
 
         img_msg = await ctx.channel.send(msg, file=File(filename))
 
-    await first_msg.edit(content=f'Getting image… Done[!](<{utils.msg_to_link(img_msg)}> "Link to message with image") :map:')
+    await first_msg.edit(
+        content=f'Getting image… Done[!](<{utils.msg_to_link(img_msg)}> "Link to message with image") :map:'
+    )
 
 
 async def elms_to_render(
@@ -966,7 +975,13 @@ async def get_image_cluster(
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
-    cluster = Image.new("RGB", (config["rendering"]["tiles_x"] * config["rendering"]["tile_w"] - 1, config["rendering"]["tiles_y"] * config["rendering"]["tile_h"] - 1))
+    cluster = Image.new(
+        "RGB",
+        (
+            config["rendering"]["tiles_x"] * config["rendering"]["tile_w"] - 1,
+            config["rendering"]["tiles_y"] * config["rendering"]["tile_h"] - 1,
+        ),
+    )
 
     t = time.time()
     async with aiohttp.ClientSession() as session:
@@ -1202,7 +1217,10 @@ async def on_message(msg: Message) -> None:
         msg_arrived = time.time()
         if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
-            utils.check_rate_limit(author_id, extra=(len(render_queue) + len(notes_render_queue)) ** config["rate_limit"]["rendering_rate_exp"])
+            utils.check_rate_limit(
+                author_id,
+                extra=(len(render_queue) + len(notes_render_queue)) ** config["rate_limit"]["rendering_rate_exp"],
+            )
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"{LOADING_EMOJI} Downloading map tiles")
             bbox = get_render_queue_bounds(render_queue, notes_render_queue)
