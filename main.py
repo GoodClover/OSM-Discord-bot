@@ -141,12 +141,12 @@ async def quota_command(ctx: SlashContext) -> None:
     msg = "\n".join(
         list(
             map(
-                lambda x: f"Command available in {round(x+config["rate_limit"]["time_period"]-tnow)} sec.",
+                lambda x: f'Command available in {round(x+config["rate_limit"]["time_period"]-tnow)} sec.',
                 sorted(command_history[ctx.author_id]),
             )
         )
     )
-    msg += f"\nYou can still send {config["rate_limit"]["max_calls"]-len(command_history[ctx.author_id])} actions to this bot."
+    msg += f'\nYou can still send {config["rate_limit"]["max_calls"]-len(command_history[ctx.author_id])} actions to this bot.'
     await ctx.send(msg, hidden=True)
 
 
