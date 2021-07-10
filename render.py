@@ -15,17 +15,18 @@ if config["symbols"]["note_solved"].startswith("http"):
     res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
     closed_note_icon = Image.open(BytesIO(res.content))
 else:
-    closed_note_icon = Image.open(config["symbols"]["note_solved"], 'rb'))
+    closed_note_icon = Image.open(open(config["symbols"]["note_solved"], 'rb'))
 if config["symbols"]["note_open"].startswith("http"):
     res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
     open_note_icon = Image.open(BytesIO(res.content))
 else:
-    open_note_icon = Image.open(config["symbols"]["note_open"], 'rb'))
+    # https://stackoverflow.com/a/11895901
+    open_note_icon = Image.open(open(config["symbols"]["note_open"], 'rb'))
 
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
-# Rendering system may need a rewrite, that focuses on object-oriented approach.
+# Rendering system may need a rewrite which focuses on object-oriented approach.
 # New class should enable easy all-in-one solution, where script can append elements waiting to be rendered.
 # Ideally there would be parallel process, that performs network requests, but that's far future.
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
