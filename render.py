@@ -31,11 +31,55 @@ closed_note_icon_size = closed_note_icon.size
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
 # Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
 
+class BaseElement:
+    def __init__(self, id):
+        self.id = str(id)
+
+class Note(BaseElement):
+    pass
+
+class Changeset(BaseElement):
+    pass
+
+class User(BaseElement):
+    def __init__(self, username):
+        self.name = str(username)
+
+class Element(BaseElement):
+    def __init__(self, elem_type, id):
+        super().__init__(id) 
+        self.type = elem_type
 
 class RenderQueue:
     def __init__(self, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
-        pass
+        # Init does nothing but sets up variables and then starts adding elements to lists.
+        # Notes have Lat, Lon and Bool for open/closed.
+        self.notes = []
+        # Changesets are currently drawn as simple rectangles,
+        # but in the future they could support drawing actual contents of changeset.
+        self.changesets = []
+        # Futureproofing. No actual functionality
+        self.users = []
+        # Elements. Generic catch-all for rest of them.  In future they could be stored as special objects.
+        self.elements = []
+        self.add(*elements)
+        return self
+    def add(self, *elements):
+        # First if handles cases like add("note", 1)
+        if len(elements) == 2 and type(elements[0]) == str and (type(elements[1]) == int or type(elements[1]) == str):
+            elements = [elements]
+       # Normal input should be add(("note", 1), ("way", 2))
+        for element in elements:
+            if element[0].lower() == "note" or element[0].lower() == "notes":
+                self.notes.append(Note(element[1]))
+            elif element[0].lower() == "changeset":
+                self.changesets.append(Changeset(element[1]))
+            elif element[0].lower() == "user":
+                self.users.append(User(element[1]))
+            else:
+                self.elements.append(Element(element[0], element[1]))
+                
 
 
 # class RenderSegment:
