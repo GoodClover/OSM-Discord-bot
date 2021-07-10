@@ -1,6 +1,5 @@
 # /bin/python3
 # Rendering functions
-
 ### Rendering ###
 # max_zoom - Maximum zoom level without notes.
 # Max_note_zoom - Maximum zoom, when notes are present on map.
@@ -15,13 +14,13 @@ if config["symbols"]["note_solved"].startswith("http"):
     res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
     closed_note_icon = Image.open(BytesIO(res.content))
 else:
-    closed_note_icon = Image.open(open(config["symbols"]["note_solved"], 'rb'))
+    closed_note_icon = Image.open(open(config["symbols"]["note_solved"], "rb"))
 if config["symbols"]["note_open"].startswith("http"):
     res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
     open_note_icon = Image.open(BytesIO(res.content))
 else:
     # https://stackoverflow.com/a/11895901
-    open_note_icon = Image.open(open(config["symbols"]["note_open"], 'rb'))
+    open_note_icon = Image.open(open(config["symbols"]["note_open"], "rb"))
 
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
