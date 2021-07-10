@@ -31,6 +31,7 @@ closed_note_icon_size = closed_note_icon.size
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
 # Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
 
+
 class BaseElement:
     def __init__(self, id):
         self.id = str(id)
@@ -41,24 +42,27 @@ class BaseElement:
         self.resolved = True
         pass
 
+
 class Note(BaseElement):
     pass
 
+
 class Changeset(BaseElement):
     pass
+
 
 class User(BaseElement):
     def __init__(self, username):
         self.name = str(username)
 
+
 class Element(BaseElement):
     def __init__(self, elem_type, id):
-        super().__init__(id) 
+        super().__init__(id)
         self.type = elem_type
 
 
 # The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large... I have hit multiple walls again.
-
 
 class RenderQueue:
     def __init__(self, *elements):
@@ -79,12 +83,13 @@ class RenderQueue:
         # Ready to be plotted on map. If all elements are converted to segments, 
         self.add(*elements)
         return self
+
     def add(self, *elements):
         # First if handles cases like add("note", 1)
         self.resolved = False
         if len(elements) == 2 and type(elements[0]) == str and (type(elements[1]) == int or type(elements[1]) == str):
             elements = [elements]
-       # Normal input should be add(("note", 1), ("way", 2))
+        # Normal input should be add(("note", 1), ("way", 2))
         for element in elements:
             if element[0].lower() == "note" or element[0].lower() == "notes":
                 self.notes.append(Note(element[1]))
@@ -94,6 +99,7 @@ class RenderQueue:
                 self.users.append(User(element[1]))
             else:
                 self.elements.append(Element(element[0], element[1]))
+                
                 
     def get_bounds(self, segments = True, notes = True) -> tuple[float, float, float, float]:
         # Finds bounding box of rendering queue (segments)
