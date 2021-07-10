@@ -31,7 +31,7 @@ closed_note_icon_size = closed_note_icon.size
 # New class should enable easy all-in-one solution, where script can append elements waiting to be rendered.
 # Ideally there would be parallel process, that performs network requests, but that's far future.
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
-# Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colors).
+# Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colors module).
 
 
 class BaseElement:
@@ -77,7 +77,9 @@ class RenderQueue:
         # Changesets are currently drawn as simple rectangles,
         # but in the future they could support drawing actual contents of changeset.
         self.changesets = []
-        # Futureproofing. No actual functionality
+        # Futureproofing. No actual functionality. One could render users by taking their profile picture
+        # and paste it at user's defined home coordinates. Sadly user home seems to be private information.
+        # Anyways.. future-proofing.
         self.users = []
         # Elements. Generic catch-all for rest of them.  In future they could be stored as special objects.
         self.elements = []
@@ -89,8 +91,8 @@ class RenderQueue:
         return self
 
     def add(self, *elements):
-        # First if handles cases like add("note", 1)
         self.resolved = False
+        # First if handles cases like add("note", 1)
         if len(elements) == 2 and type(elements[0]) == str and (type(elements[1]) == int or type(elements[1]) == str):
             elements = [elements]
         # Normal input should be add(("note", 1), ("way", 2))
