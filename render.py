@@ -8,9 +8,10 @@
 # tile_margin_x / tile_margin_y - How much free space is left at edges
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
+from config import config
+
 import colors
 import network
-from config import config
 
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
@@ -39,6 +40,7 @@ closed_note_icon_size = closed_note_icon.size
 # I think these elements' classes should be split up into separate file for element processing methods,
 # Covering element instance lifecycle from download to uploading to chat.
 
+
 class BaseElement:
     def __init__(self, elm_type, id, **kwargs):
         self.id = str(id)
@@ -65,6 +67,7 @@ class BaseElement:
 class Note(BaseElement):
     def __init__(self, id):
         super().__init__("note", id)
+
     def resolve(self):
         super().resolve()
 
@@ -81,6 +84,7 @@ class User(BaseElement):
     def __init__(self, username):
         super().__init__("user", network.get_id_from_username(username))
         self.name = str(username)
+
     def resolve(self):
         super().resolve()
 
@@ -88,6 +92,7 @@ class User(BaseElement):
 class Element(BaseElement):
     def __init__(self, elem_type, id):
         super().__init__(elm_type, id)
+
     def resolve(self):
         super().resolve()
 
@@ -136,10 +141,10 @@ class RenderQueue:
 
     def resolve(self):
         # Queries elements to resolve geometry.
-        # Resolve is term from overpass query processing for relations, 
-        # where initial query has only metadata and you need separate command 
+        # Resolve is term from overpass query processing for relations,
+        # where initial query has only metadata and you need separate command
         # to download actual geometry information.
-        if self.resolved: 
+        if self.resolved:
             return
         for element in self.elements:
             if not element.resolved:
@@ -190,7 +195,7 @@ class RenderQueue:
 
     def calc_preview_area(self) -> tuple[int, float, float]:
         # queue_bounds: tuple[float, float, float, float]
-        
+
         # Input: tuple (min_lat, max_lat, min_lon, max_lon)
         # Output: tuple (int(zoom), float(lat), float(lon))
         # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
@@ -204,7 +209,9 @@ class RenderQueue:
             math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"]))
         )
         center_lon = delta_lon / 2 + min_lon
-        zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+        zoom_y = (
+            config["rendering"]["max_zoom"] + 1
+        )  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
         while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
             "tiles_y"
         ] - 2 * config["rendering"]["tile_margin_y"]:
@@ -239,8 +246,10 @@ class RenderSegment:
         if no_of_nodes < config["render"]["limiter_offset"]:
             return no_of_nodes
         else:
-            return int((no_of_nodes - config["render"]["limiter_offset"]) ** (
-                1 / config["render"]["reduction_factor"]) + config["render"]["limiter_offset"])
+            return int(
+                (no_of_nodes - config["render"]["limiter_offset"]) ** (1 / config["render"]["reduction_factor"])
+                + config["render"]["limiter_offset"]
+            )
 
 
 # Standard part for getting map:
