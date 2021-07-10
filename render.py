@@ -36,8 +36,9 @@ closed_note_icon_size = closed_note_icon.size
 
 
 class BaseElement:
-    def __init__(self, id):
+    def __init__(self, elm_type, id, **kwargs):
         self.id = str(id)
+        self.type = elem_type
         # Has this element been optimized into renderable form.
         self.resolved = False
         # Geomentry will be different from original. List of RenderSegment-s
@@ -47,7 +48,9 @@ class BaseElement:
         # * single coordinate pair /w image (note / user)
         # * single array of coordinates (RenderSegment / way)
         # * array of RenderSegment-s (relation)
+        # Actually that's pretty much self.type
         self.rendertype = None
+        self.elm = get_elm(elm_type, id, "dicussion" in kwargs and kwargs["dicussion"])
 
     def resolve(self):
         # Add code for geometry lookup
@@ -56,27 +59,31 @@ class BaseElement:
 
 
 class Note(BaseElement):
+    def __init__(self, id):
+        super().__init__("note", id)
     def resolve(self):
         super().resolve()
 
 
 class Changeset(BaseElement):
+    def __init__(self, id, get_discussion: bool = False):
+        super().__init__("changeset", id, dicussion=get_discussion)
+
     def resolve(self):
         super().resolve()
 
 
 class User(BaseElement):
     def __init__(self, username):
+        super().__init__("user", network.get_id_from_username(username))
         self.name = str(username)
-        self.id = network.get_id_from_username(username)
     def resolve(self):
         super().resolve()
 
 
 class Element(BaseElement):
     def __init__(self, elem_type, id):
-        super().__init__(id)
-        self.type = elem_type
+        super().__init__(elm_type, id)
     def resolve(self):
         super().resolve()
 

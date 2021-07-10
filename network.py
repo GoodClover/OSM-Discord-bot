@@ -30,7 +30,8 @@ def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> d
     except (json.decoder.JSONDecodeError):
         raise ValueError(f"{elm_type.capitalize()} `{elm_id}` does not exist.")
     if elm_type == "note":
-        pass  # Notes don't need special parsing, they are good to go.
+        elm["geometry"] = [[tuple(elm["geometry"]["coordinates"])]]
+        pass  # Notes don't need much special parsing, they are good to go.
     elif elm_type == "changeset":
         try:
             elm = elm["elements"][0]
