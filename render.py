@@ -8,6 +8,7 @@
 # tile_margin_x / tile_margin_y - How much free space is left at edges
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
+import colors
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 if config["symbols"]["note_solved"].startswith("http"):
@@ -29,7 +30,7 @@ closed_note_icon_size = closed_note_icon.size
 # New class should enable easy all-in-one solution, where script can append elements waiting to be rendered.
 # Ideally there would be parallel process, that performs network requests, but that's far future.
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
-# Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
+# Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colors).
 
 
 class BaseElement:
@@ -105,6 +106,8 @@ class RenderQueue:
     def get_bounds(self, segments=True, notes=True) -> tuple[float, float, float, float]:
         # Finds bounding box of rendering queue (segments)
         # Rendering queue is bunch of coordinates that was calculated in previous function.
+        if self.resolved:
+            raise ValueError("Unresolved element. Element ID was given for rendering, but it was never converted into geographical coordinates.")
         min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
         precision = 5  # https://xkcd.com/2170/
         for segment in self.segments:
