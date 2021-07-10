@@ -27,6 +27,7 @@ POTLATCH = re.compile(POTLATCH, re.IGNORECASE)
 
 def find_matches(pattern, phrase):
     # Type: re.Pattern
+    # Finds matches for inline elements.
     output = list()
     for elm in pattern.findall(phrase):
         output.append((elm[0].lower(), tuple(STRING.findall(elm[2])), elm[1]))

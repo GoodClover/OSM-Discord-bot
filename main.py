@@ -54,15 +54,7 @@ cached_files: set = (
 recent_googles: set = set()  # Set of unix timestamps.
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
-### Rendering ###
-# max_zoom - Maximum zoom level without notes.
-# Max_note_zoom - Maximum zoom, when notes are present on map.
-# tile_w/tile_h - Tile size used for renderer
-# tiles_x/tiles_y - Dimensions of output map fragment
-# tile_margin_x / tile_margin_y - How much free space is left at edges
-# Used in render_elms_on_cluster. List of colours to be cycled.
-# Colours need to be reworked for something prettier, therefore don't relocate them yet.
-element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
+
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
@@ -262,6 +254,30 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
 
 
 ### Elements ###
+# Actual slash commands for all elements could be standardized.
+# It's the get_embed that's different.
+
+"""
+    files = []
+    if "map" in extras_list:
+        await ctx.defer()
+        render_queue = changeset["geometry"]
+        utils.check_rate_limit(ctx.author_id)
+        bbox = get_render_queue_bounds(render_queue)
+        zoom, lat, lon = calc_preview_area(bbox)
+        cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+        cached_files.add(filename)
+        cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+        cached_files.add(filename2)
+    embed = changeset_embed(changeset, extras_list)
+    file = None
+    if "map" in extras_list:
+        print("attachment://" + filename2.split("/")[-1])
+        embed.set_image(url="attachment://" + filename2.split("/")[-1])
+        file = File(filename2)
+    await ctx.send(embed=embed, file=file)
+"""
+
 @slash.slash(
     name="elm",
     description="Show details about an element.",
@@ -609,7 +625,7 @@ def changeset_embed(changeset: dict, extras: Iterable[str] = []) -> Embed:
         ),
         create_option(
             name="extras",
-            description="Comma seperated list of extras from `info`, `discussion`.",
+            description="Comma seperated list of extras from `info`, `discussion`, `map`.",
             option_type=3,
             required=False,
         ),
@@ -622,7 +638,7 @@ async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> Non
     extras_list = [e.strip() for e in extras.lower().split(",")]
 
     for extra in extras_list:
-        if extra != "" and extra not in ["info", "discussion"]:
+        if extra != "" and extra not in ["info", "discussion", "map"]:
             await ctx.send(f"Unrecognised extra `{extra}`.\nPlease choose from `info`.", hidden=True)
             return
 

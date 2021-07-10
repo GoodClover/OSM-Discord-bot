@@ -32,9 +32,35 @@ closed_note_icon_size = closed_note_icon.size
 # Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colours-loader).
 
 
-# class RenderQueue:
+class RenderQueue:
+    def __init__(self, *elements):
+        # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
+        pass
 
 # class RenderSegment:
+
+
+# Standard part for getting map:
+"""
+    files = []
+    if "map" in extras_list:
+        await ctx.defer()
+        render_queue = changeset["geometry"]
+        utils.check_rate_limit(ctx.author_id)
+        bbox = get_render_queue_bounds(render_queue)
+        zoom, lat, lon = calc_preview_area(bbox)
+        cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
+        cached_files.add(filename)
+        cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
+        cached_files.add(filename2)
+    embed = changeset_embed(changeset, extras_list)
+    file = None
+    if "map" in extras_list:
+        print("attachment://" + filename2.split("/")[-1])
+        embed.set_image(url="attachment://" + filename2.split("/")[-1])
+        file = File(filename2)
+    await ctx.send(embed=embed, file=file)
+"""
 
 
 def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
