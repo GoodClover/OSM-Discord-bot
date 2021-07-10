@@ -10,6 +10,7 @@
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 import colors
 import network
+from config import config
 
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
@@ -28,12 +29,15 @@ else:
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 
+
 # Rendering system may need a rewrite which focuses on object-oriented approach.
 # New class should enable easy all-in-one solution, where script can append elements waiting to be rendered.
 # Ideally there would be parallel process, that performs network requests, but that's far future.
 # What main.py sees, are RenderQueue.add_element, remove_element and render_image. Maybe download_queue.
 # Render segment is currently just list of coordinates, but in the future i want it to support for simplifying the output and tag-processing (reading colour tags with colors module).
 
+# I think these elements' classes should be split up into separate file for element processing methods,
+# Covering element instance lifecycle from download to uploading to chat.
 
 class BaseElement:
     def __init__(self, elm_type, id, **kwargs):
@@ -184,8 +188,59 @@ class RenderQueue:
             max_lon += 10 ** (-precision)
         return (min_lat, max_lat, min_lon, max_lon)
 
+    def calc_preview_area(self) -> tuple[int, float, float]:
+        # queue_bounds: tuple[float, float, float, float]
+        
+        # Input: tuple (min_lat, max_lat, min_lon, max_lon)
+        # Output: tuple (int(zoom), float(lat), float(lon))
+        # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
+        # Finds map area, that should contain all elements.
+        # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
+        print("Elements bounding box:", *list(map(lambda x: round(x, 4), self.queue_bounds)))
+        min_lat, max_lat, min_lon, max_lon = self.queue_bounds
+        delta_lat = max_lat - min_lat
+        delta_lon = max_lon - min_lon
+        zoom_x = int(
+            math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"]))
+        )
+        center_lon = delta_lon / 2 + min_lon
+        zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+        while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
+            "tiles_y"
+        ] - 2 * config["rendering"]["tile_margin_y"]:
+            zoom_y -= 1  # Bit slow and dumb approach
+        zoom = min(zoom_x, zoom_y, config["rendering"]["max_zoom"])
+        tile_y_min = utils.deg2tile_float(max_lat, 0, zoom)[1]
+        tile_y_max = utils.deg2tile_float(min_lat, 0, zoom)[1]
+        print(zoom, center_lon)
+        if zoom < 10:
+            # At low zoom levels and high latitudes, mercator's distortion must be accounted
+            center_lat = round(utils.tile2deg(zoom, 0, (tile_y_max + tile_y_min) / 2)[0], 5)
+        else:
+            center_lat = (max_lat - min_lat) / 2 + min_lat
+        print(center_lat, min_lat, max_lat)
+        self.preview_area = (zoom, center_lat, center_lon)
+        return (zoom, center_lat, center_lon)
 
-# class RenderSegment:
+
+class RenderSegment:
+    def reduce(self):
+        # See  def reduce_segment_nodes(segments
+        pass
+
+    def __add__(self, other_segment):
+        # See  def merge_segments(segments
+        pass
+
+    def calc_limit(no_of_nodes):
+        # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
+        # Limiter_offset - Minimum number of nodes.
+        # Reduction_factor - n-th root by which array length is reduced.
+        if no_of_nodes < config["render"]["limiter_offset"]:
+            return no_of_nodes
+        else:
+            return int((no_of_nodes - config["render"]["limiter_offset"]) ** (
+                1 / config["render"]["reduction_factor"]) + config["render"]["limiter_offset"])
 
 
 # Standard part for getting map:
@@ -214,12 +269,6 @@ class RenderQueue:
 def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
-    # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
-    Limiter_offset = 50  # Minimum number of nodes.
-    Reduction_factor = 2  # n-th root by which array length is reduced.
-    calc_limit = (
-        lambda x: x if x < Limiter_offset else int((x - Limiter_offset) ** (1 / Reduction_factor) + Limiter_offset)
-    )
     for seg_num in range(len(segments)):
         segment = segments[seg_num]  # For each segment
         seg_len = len(segment)
@@ -242,79 +291,6 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     # with elms_to_render('relation','908054')
     # Result:  15458 vs 6564
     return reduced
-
-
-def get_render_queue_bounds(
-    segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []
-) -> tuple[float, float, float, float]:
-    # Finds bounding box of rendering queue (segments)
-    # Rendering queue is bunch of coordinates that was calculated in previous function.
-    min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
-    precision = 5  # https://xkcd.com/2170/
-    for segment in segments:
-        for coordinates in segment:
-            lat, lon = coordinates
-            # int() because type checker is an idiot
-            # Switching it to int kills the whole renderer!
-            if lat > max_lat:
-                max_lat = round(lat, precision)
-            if lat < min_lat:
-                min_lat = round(lat, precision)
-            if lon > max_lon:
-                max_lon = round(lon, precision)
-            if lon < min_lon:
-                min_lon = round(lon, precision)
-    for note in notes:
-        lat, lon, solved = note
-        # int() because type checker is an idiot
-        # Switching it to int kills the whole renderer!
-        if lat > max_lat:
-            max_lat = round(lat, precision)
-        if lat < min_lat:
-            min_lat = round(lat, precision)
-        if lon > max_lon:
-            max_lon = round(lon, precision)
-        if lon < min_lon:
-            min_lon = round(lon, precision)
-    if min_lat == max_lat:  # In event when all coordinates are same...
-        min_lat -= 10 ** (-precision)
-        max_lat += 10 ** (-precision)
-    if min_lon == max_lon:  # Add small variation to not end up in ZeroDivisionError
-        min_lon -= 10 ** (-precision)
-        max_lon += 10 ** (-precision)
-    return (min_lat, max_lat, min_lon, max_lon)
-
-
-def calc_preview_area(queue_bounds: tuple[float, float, float, float]) -> tuple[int, float, float]:
-    # Input: tuple (min_lat, max_lat, min_lon, max_lon)
-    # Output: tuple (int(zoom), float(lat), float(lon))
-    # Based on old showmap function and https://wiki.openstreetmap.org/wiki/Zoom_levels
-    # Finds map area, that should contain all elements.
-    # I think this function causes issues with incorrect rendering due to using average of boundaries, not tiles.
-    print("Elements bounding box:", *list(map(lambda x: round(x, 4), queue_bounds)))
-    min_lat, max_lat, min_lon, max_lon = queue_bounds
-    delta_lat = max_lat - min_lat
-    delta_lon = max_lon - min_lon
-    zoom_x = int(
-        math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"]))
-    )
-    center_lon = delta_lon / 2 + min_lon
-    zoom_y = config["rendering"]["max_zoom"] + 1  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-    while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
-        "tiles_y"
-    ] - 2 * config["rendering"]["tile_margin_y"]:
-        zoom_y -= 1  # Bit slow and dumb approach
-    zoom = min(zoom_x, zoom_y, config["rendering"]["max_zoom"])
-    tile_y_min = utils.deg2tile_float(max_lat, 0, zoom)[1]
-    tile_y_max = utils.deg2tile_float(min_lat, 0, zoom)[1]
-    print(zoom, center_lon)
-    if zoom < 10:
-        # At low zoom levels and high latitudes, mercator's distortion must be accounted
-        center_lat = round(utils.tile2deg(zoom, 0, (tile_y_max + tile_y_min) / 2)[0], 5)
-    else:
-        center_lat = (max_lat - min_lat) / 2 + min_lat
-    print(center_lat, min_lat, max_lat)
-    return (zoom, center_lat, center_lon)
 
 
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
