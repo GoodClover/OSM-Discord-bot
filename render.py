@@ -34,6 +34,12 @@ closed_note_icon_size = closed_note_icon.size
 class BaseElement:
     def __init__(self, id):
         self.id = str(id)
+        # Has this element been optimized into renderable form.
+        self.resolved = False
+    def resolve(self):
+        # Add code for geometry lookup
+        self.resolved = True
+        pass
 
 class Note(BaseElement):
     pass
@@ -50,6 +56,10 @@ class Element(BaseElement):
         super().__init__(id) 
         self.type = elem_type
 
+
+# The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large... I have hit multiple walls again.
+
+
 class RenderQueue:
     def __init__(self, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
@@ -63,10 +73,15 @@ class RenderQueue:
         self.users = []
         # Elements. Generic catch-all for rest of them.  In future they could be stored as special objects.
         self.elements = []
+        # Resolved - has element IDs been converted into tags and geoetry?
+        self.resolved = False
+        # Segments - array of geographic coordinates with defined or undefined colours. 
+        # Ready to be plotted on map. If all elements are converted to segments, 
         self.add(*elements)
         return self
     def add(self, *elements):
         # First if handles cases like add("note", 1)
+        self.resolved = False
         if len(elements) == 2 and type(elements[0]) == str and (type(elements[1]) == int or type(elements[1]) == str):
             elements = [elements]
        # Normal input should be add(("note", 1), ("way", 2))
@@ -80,7 +95,43 @@ class RenderQueue:
             else:
                 self.elements.append(Element(element[0], element[1]))
                 
-
+    def get_bounds(self, segments = True, notes = True) -> tuple[float, float, float, float]:
+        # Finds bounding box of rendering queue (segments)
+        # Rendering queue is bunch of coordinates that was calculated in previous function.
+        min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
+        precision = 5  # https://xkcd.com/2170/
+        for segment in self.segments:
+            for coordinates in segment:
+                lat, lon = coordinates
+                # int() because type checker is an idiot
+                # Switching it to int kills the whole renderer!
+                if lat > max_lat:
+                    max_lat = round(lat, precision)
+                if lat < min_lat:
+                    min_lat = round(lat, precision)
+                if lon > max_lon:
+                    max_lon = round(lon, precision)
+                if lon < min_lon:
+                    min_lon = round(lon, precision)
+        for note in self.notes:
+            lat, lon, solved = note
+            # int() because type checker is an idiot
+            # Switching it to int kills the whole renderer!
+            if lat > max_lat:
+                max_lat = round(lat, precision)
+            if lat < min_lat:
+                min_lat = round(lat, precision)
+            if lon > max_lon:
+                max_lon = round(lon, precision)
+            if lon < min_lon:
+                min_lon = round(lon, precision)
+        if min_lat == max_lat:  # In event when all coordinates are same...
+            min_lat -= 10 ** (-precision)
+            max_lat += 10 ** (-precision)
+        if min_lon == max_lon:  # Add small variation to not end up in ZeroDivisionError
+            min_lon -= 10 ** (-precision)
+            max_lon += 10 ** (-precision)
+        return (min_lat, max_lat, min_lon, max_lon)
 
 # class RenderSegment:
 
