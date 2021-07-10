@@ -55,7 +55,6 @@ recent_googles: set = set()  # Set of unix timestamps.
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 
-
 overpass_api = overpy.Overpass(url=config["overpass_url"])
 
 INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:
@@ -277,6 +276,7 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
         file = File(filename2)
     await ctx.send(embed=embed, file=file)
 """
+
 
 @slash.slash(
     name="elm",
