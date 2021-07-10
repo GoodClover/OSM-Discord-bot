@@ -37,6 +37,7 @@ class BaseElement:
         self.id = str(id)
         # Has this element been optimized into renderable form.
         self.resolved = False
+
     def resolve(self):
         # Add code for geometry lookup
         self.resolved = True
@@ -64,6 +65,7 @@ class Element(BaseElement):
 
 # The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large... I have hit multiple walls again.
 
+
 class RenderQueue:
     def __init__(self, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
@@ -79,8 +81,8 @@ class RenderQueue:
         self.elements = []
         # Resolved - has element IDs been converted into tags and geoetry?
         self.resolved = False
-        # Segments - array of geographic coordinates with defined or undefined colours. 
-        # Ready to be plotted on map. If all elements are converted to segments, 
+        # Segments - array of geographic coordinates with defined or undefined colours.
+        # Ready to be plotted on map. If all elements are converted to segments,
         self.add(*elements)
         return self
 
@@ -99,9 +101,8 @@ class RenderQueue:
                 self.users.append(User(element[1]))
             else:
                 self.elements.append(Element(element[0], element[1]))
-                
-                
-    def get_bounds(self, segments = True, notes = True) -> tuple[float, float, float, float]:
+
+    def get_bounds(self, segments=True, notes=True) -> tuple[float, float, float, float]:
         # Finds bounding box of rendering queue (segments)
         # Rendering queue is bunch of coordinates that was calculated in previous function.
         min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
@@ -138,6 +139,7 @@ class RenderQueue:
             min_lon -= 10 ** (-precision)
             max_lon += 10 ** (-precision)
         return (min_lat, max_lat, min_lon, max_lon)
+
 
 # class RenderSegment:
 
