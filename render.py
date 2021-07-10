@@ -1,10 +1,27 @@
 # /bin/python3
 # Rendering functions
 
-res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
-closed_note_icon = Image.open(BytesIO(res.content))
-res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
-open_note_icon = Image.open(BytesIO(res.content))
+### Rendering ###
+# max_zoom - Maximum zoom level without notes.
+# Max_note_zoom - Maximum zoom, when notes are present on map.
+# tile_w/tile_h - Tile size used for renderer
+# tiles_x/tiles_y - Dimensions of output map fragment
+# tile_margin_x / tile_margin_y - How much free space is left at edges
+# Used in render_elms_on_cluster. List of colours to be cycled.
+# Colours need to be reworked for something prettier, therefore don't relocate them yet.
+element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
+
+if config["symbols"]["note_solved"].startswith("http"):
+    res = requests.get(config["symbols"]["note_solved"], headers=config["rendering"]["HEADERS"])
+    closed_note_icon = Image.open(BytesIO(res.content))
+else:
+    closed_note_icon = Image.open(config["symbols"]["note_solved"], 'rb'))
+if config["symbols"]["note_open"].startswith("http"):
+    res = requests.get(config["symbols"]["note_open"], headers=config["rendering"]["HEADERS"])
+    open_note_icon = Image.open(BytesIO(res.content))
+else:
+    open_note_icon = Image.open(config["symbols"]["note_open"], 'rb'))
+
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
 

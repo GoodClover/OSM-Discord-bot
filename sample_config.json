@@ -27,8 +27,8 @@
         "tag": "https://wiki.openstreetmap.org/w/images/thumb/5/5f/Osm_element_tag.svg/256px-Osm_element_tag.svg.png",
         "value": "https://wiki.openstreetmap.org/w/images/thumb/f/fd/Osm_element_value.svg/256px-Osm_element_value.svg.png",
         "user": "https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/master/app/assets/images/avatar_large.png",
-        "note_open": "https://wiki.openstreetmap.org/w/images/d/d0/Open_note_marker.png",
-        "note_solved": "https://wiki.openstreetmap.org/w/images/6/6a/Closed_note_marker.png"
+        "note_open": "res/img/Open_note_marker.png",
+        "note_solved": "res/img/Closed_note_marker.png"
     },
     "emoji": {
         "github": "<:github:857627201510834176>",
