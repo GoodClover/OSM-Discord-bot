@@ -9,6 +9,7 @@
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 import colors
+
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 if config["symbols"]["note_solved"].startswith("http"):
@@ -107,7 +108,9 @@ class RenderQueue:
         # Finds bounding box of rendering queue (segments)
         # Rendering queue is bunch of coordinates that was calculated in previous function.
         if self.resolved:
-            raise ValueError("Unresolved element. Element ID was given for rendering, but it was never converted into geographical coordinates.")
+            raise ValueError(
+                "Unresolved element. Element ID was given for rendering, but it was never converted into geographical coordinates."
+            )
         min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
         precision = 5  # https://xkcd.com/2170/
         for segment in self.segments:
