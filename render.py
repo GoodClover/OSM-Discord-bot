@@ -9,6 +9,7 @@
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 import colors
+import network
 
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
@@ -39,6 +40,14 @@ class BaseElement:
         self.id = str(id)
         # Has this element been optimized into renderable form.
         self.resolved = False
+        # Geomentry will be different from original. List of RenderSegment-s
+        self.geometry = None
+        # Rendertype tells if we are dealing with either:
+        # * single coordinate pair (node)
+        # * single coordinate pair /w image (note / user)
+        # * single array of coordinates (RenderSegment / way)
+        # * array of RenderSegment-s (relation)
+        self.rendertype = None
 
     def resolve(self):
         # Add code for geometry lookup
@@ -47,28 +56,36 @@ class BaseElement:
 
 
 class Note(BaseElement):
-    pass
+    def resolve(self):
+        super().resolve()
 
 
 class Changeset(BaseElement):
-    pass
+    def resolve(self):
+        super().resolve()
 
 
 class User(BaseElement):
     def __init__(self, username):
         self.name = str(username)
+        self.id = network.get_id_from_username(username)
+    def resolve(self):
+        super().resolve()
 
 
 class Element(BaseElement):
     def __init__(self, elem_type, id):
         super().__init__(id)
         self.type = elem_type
+    def resolve(self):
+        super().resolve()
 
 
-# The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large... I have hit multiple walls again.
+# The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large; therefore they need to be optimized into something simpler... I have hit multiple walls again.
 
 
 class RenderQueue:
+    # Think of RenderQueue like temporary collection of elements, that will be featured on single image.
     def __init__(self, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
         # Init does nothing but sets up variables and then starts adding elements to lists.
@@ -105,6 +122,18 @@ class RenderQueue:
                 self.users.append(User(element[1]))
             else:
                 self.elements.append(Element(element[0], element[1]))
+
+    def resolve(self):
+        # Queries elements to resolve geometry.
+        # Resolve is term from overpass query processing for relations, 
+        # where initial query has only metadata and you need separate command 
+        # to download actual geometry information.
+        if self.resolved: 
+            return
+        for element in self.elements:
+            if not element.resolved:
+                element.resolve()
+        self.resolved = True
 
     def get_bounds(self, segments=True, notes=True) -> tuple[float, float, float, float]:
         # Finds bounding box of rendering queue (segments)
