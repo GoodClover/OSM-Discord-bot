@@ -6,11 +6,11 @@ repos:
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
 -   repo: https://github.com/psf/black
-    rev: 21.6b0
+    rev: 21.7b0
     hooks:
     -   id: black
       # Note that black's line length has been set to 120 in pyproject.toml
 -   repo: https://github.com/asottile/reorder_python_imports
-    rev: v2.5.0
+    rev: v2.6.0
     hooks:
     -   id: reorder-python-imports
