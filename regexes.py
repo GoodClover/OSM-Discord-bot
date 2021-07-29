@@ -2,7 +2,7 @@
 import re
 
 SS = r"(?<!\/|\w)"  # Safe Start
-SE = r"(?!\/|\w|[\.\?\!\)])"  # Safe End
+SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
 USERNAME = r"[\w\-_]+"
@@ -11,7 +11,7 @@ ELM_INLINE = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(
 CHANGESET_INLINE = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 NOTE_INLINE = rf"{SS}(note)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 USER_INLINE = rf"{SS}(user)(s? |\/)({USERNAME}(?:(?:, | and | or | )(?:{USERNAME}))*){SE}"
-# FIXME: For some reason this allows stuff after the end of the map fragment.
+# FIXME: For some reason user inline allows stuff after the end of the map fragment (probably spaces).
 MAP_FRAGMENT_INLINE = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 MAP_FRAGEMT_CAPTURING = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
 POTLATCH = r"(ha(ve|d|s) )?us(ed|ing|es?) potlatch"

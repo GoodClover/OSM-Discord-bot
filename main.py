@@ -256,31 +256,6 @@ def taginfo_embed(key: str, value: str | None = None) -> Embed:
 
 
 ### Elements ###
-# Actual slash commands for all elements could be standardized.
-# It's the get_embed that's different.
-
-"""
-    files = []
-    if "map" in extras_list:
-        await ctx.defer()
-        render_queue = changeset["geometry"]
-        utils.check_rate_limit(ctx.author_id)
-        bbox = get_render_queue_bounds(render_queue)
-        zoom, lat, lon = calc_preview_area(bbox)
-        cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
-        cached_files.add(filename)
-        cluster, filename2 = render_elms_on_cluster(cluster, render_queue, (zoom, lat, lon))
-        cached_files.add(filename2)
-    embed = changeset_embed(changeset, extras_list)
-    file = None
-    if "map" in extras_list:
-        print("attachment://" + filename2.split("/")[-1])
-        embed.set_image(url="attachment://" + filename2.split("/")[-1])
-        file = File(filename2)
-    await ctx.send(embed=embed, file=file)
-"""
-
-
 @slash.slash(
     name="elm",
     description="Show details about an element.",
@@ -710,7 +685,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
         # Example: *- User opened on 2020-04-14 08:00*
         embed.description += utils.format_discussions(note["properties"]["comments"])
     if creator != "*Anonymous*":
-        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator.replace(' ', '%20'}/notes)"
+        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator.replace(' ', '%20')}/notes)"
     return embed
 
 
@@ -746,9 +721,9 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
             return
 
     try:
-        # Both will raise ValueError if the user isn't found, get_id_from_username will usually error first.
+        # Both will raise ValueError if the user isn't found, network.get_id_from_username will usually error first.
         # In cases where the account was only removed recently, getting user will error.
-        user_id = get_id_from_username(username)
+        user_id = network.get_id_from_username(username)
         user = network.get_elm("user", user_id)
     except ValueError as error_message:
         await ctx.send(error_message, hidden=True)
@@ -991,6 +966,7 @@ async def get_image_cluster(
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
     tile_range = render.get_image_tile_range(lat_deg, lon_deg, zoom)
+    # print(tile_range)
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
@@ -1008,8 +984,9 @@ async def get_image_cluster(
         for xtile in range(xmin - 1, xmax + 2):
             # print(xtile, xtile % n)
             xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
-            # Xtile is preserved, because it's used for plotting it on map
-            for ytile in range(ymin, min([ymax + 2, n])):
+            # Xtile is preserved, because it's used for plotting tile on image cluster,
+            # While xtile_corrected value is by N smaller and used for requesting tile from web.
+            for ytile in range(max([0,ymin]), min([ymax + 2, n])):
                 tasks.append(
                     _get_image_cluster__get_image(
                         session,
@@ -1268,12 +1245,14 @@ async def on_message(msg: Message) -> None:
                 cached_files.add(filename2)
             files.append(File(filename2))
 
-        for username in users:
-            await status_msg.edit(content=f"{LOADING_EMOJI} Processing user/{username}.")
-            try:
-                embeds.append(user_embed(network.get_elm("user", get_id_from_username(username))))
-            except ValueError as error_message:
-                errorlog.append(("user", username, error_message))
+        for elm_type, usernames, separator in users:
+            # note_ids = (<tuple: list of notes>, <str: separator used>)
+            for username in usernames:
+                await status_msg.edit(content=f"{LOADING_EMOJI} Processing user/{username}.")
+                try:
+                    embeds.append(user_embed(network.get_elm("user", network.get_id_from_username(username))))
+                except ValueError as error_message:
+                    errorlog.append(("user", username, error_message))
 
         for map_frag in map_frags:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")

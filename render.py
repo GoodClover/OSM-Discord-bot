@@ -6,10 +6,10 @@
 # tile_w/tile_h - Tile size used for renderer
 # tiles_x/tiles_y - Dimensions of output map fragment
 # tile_margin_x / tile_margin_y - How much free space is left at edges
-# Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 from configuration import config
 
+import requests
 import colors
 import network
 import utils
@@ -227,9 +227,8 @@ class RenderQueue:
             math.log2((360 / delta_lon) * (config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"]))
         )
         center_lon = delta_lon / 2 + min_lon
-        zoom_y = (
-            config["rendering"]["max_zoom"] + 1
-        )  # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+        # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
+        zoom_y = (config["rendering"]["max_zoom"] + 1)
         while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
             "tiles_y"
         ] - 2 * config["rendering"]["tile_margin_y"]:
@@ -330,6 +329,8 @@ class RenderSegment:
         return None
 
 
+# Actual slash commands for all elements could be standardized.
+# It's the get_embed that's different.
 # Standard part for getting map:
 """
     files = []
@@ -383,15 +384,20 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = utils.deg2tile_float(lat_deg, lon_deg, zoom)
+    # print("Center X/Y:", center_x, center_y)
     xmin, xmax = int(center_x - config["rendering"]["tiles_x"] / 2), int(center_x + config["rendering"]["tiles_x"] / 2)
+    # print("X min/max:", xmin, xmax)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     if config["rendering"]["tiles_x"] % 2 == 0:
         xmax -= 1
     ymin, ymax = int(center_y - config["rendering"]["tiles_y"] / 2), int(center_y + config["rendering"]["tiles_y"] / 2)
     if config["rendering"]["tiles_y"] % 2 == 0:
         ymax -= 1
-    ymin = max(ymin, 0)  # Sets vertical limits to area.
-    ymax = min(ymax, n)
+    # Sets vertical limits to area.
+    # This part has been commented out because if actual Y-tile range is smaller
+    # than constant defined in config, tiles will be drawn at too high location.
+    # ymin = max(ymin, 0)
+    # ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
     print("Tile offset calculation")
     print(

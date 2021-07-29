@@ -126,7 +126,14 @@ def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
     # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
+    print(xy, zoom, tile_range)
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
+    print((xy[0] - xmin - tile_offset[0]), (xy[1] - ymin - tile_offset[1]))
+    if zoom < 3:
+        # I don't know how to fix low-zoom offset error, but this might help
+        # Miscalculation is caused due to tile range (5 tiles) being larger
+        # than N (number of tiles in zoom level)
+        tile_offset = (tile_offset[0]-1, tile_offset[1]-1)
     coord = (
         round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]),
         round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]),
