@@ -23,13 +23,13 @@ import overpy
 import requests
 from discord import AllowedMentions
 from discord import Client
-from discord.ext import commands
 from discord import Embed
 from discord import File
 from discord import Guild
 from discord import Intents
 from discord import Member
 from discord import Message
+from discord.ext import commands
 from discord_slash import SlashCommand
 from discord_slash import SlashContext
 from discord_slash.context import ComponentContext
@@ -42,10 +42,10 @@ from dotenv import load_dotenv
 from PIL import Image
 from PIL import ImageDraw  # For drawing elements
 
-import regexes
-import utils
 import network
+import regexes
 import render
+import utils
 from configuration import config
 from configuration import guild_ids
 from utils import *  # Backup for cases when utils.* prefix was not added yet.
@@ -77,13 +77,13 @@ with open(config["josm_tips_file"], "r", encoding="utf8") as file:
 
 client = commands.Bot(
     intents=Intents.all(),
-        command_prefix='?',
+    command_prefix="?",
     allowed_mentions=AllowedMentions(
         # I also use checks elsewhere to prevent @ injection.
         everyone=False,
         users=True,
         roles=False,
-        replied_user=False
+        replied_user=False,
     ),
 )
 slash = SlashCommand(client, sync_commands=True)
@@ -685,7 +685,9 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
         # Example: *- User opened on 2020-04-14 08:00*
         embed.description += utils.format_discussions(note["properties"]["comments"])
     if creator != "*Anonymous*":
-        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator.replace(' ', '%20')}/notes)"
+        embed.description += (
+            f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator.replace(' ', '%20')}/notes)"
+        )
     return embed
 
 
@@ -986,7 +988,7 @@ async def get_image_cluster(
             xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
             # Xtile is preserved, because it's used for plotting tile on image cluster,
             # While xtile_corrected value is by N smaller and used for requesting tile from web.
-            for ytile in range(max([0,ymin]), min([ymax + 2, n])):
+            for ytile in range(max([0, ymin]), min([ymax + 2, n])):
                 tasks.append(
                     _get_image_cluster__get_image(
                         session,
@@ -1193,7 +1195,7 @@ async def on_message(msg: Message) -> None:
             for note_id in note_ids:
                 await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{note_id}.")
                 try:
-                    note = network.get_elm("note",note_id)
+                    note = network.get_elm("note", note_id)
                     if add_embedded:
                         embeds.append(note_embed(note))
                     if add_image:

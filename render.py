@@ -228,7 +228,7 @@ class RenderQueue:
         )
         center_lon = delta_lon / 2 + min_lon
         # Zoom level is determined by trying to fit x/y bounds into 5 tiles.
-        zoom_y = (config["rendering"]["max_zoom"] + 1)
+        zoom_y = config["rendering"]["max_zoom"] + 1
         while (utils.deg2tile(min_lat, 0, zoom_y)[1] - utils.deg2tile(max_lat, 0, zoom_y)[1] + 1) > config["rendering"][
             "tiles_y"
         ] - 2 * config["rendering"]["tile_margin_y"]:

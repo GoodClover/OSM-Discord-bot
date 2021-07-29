@@ -134,7 +134,7 @@ def tile2pixel(xy, zoom, tile_range):
         # I don't know how to fix low-zoom offset error, but this might help
         # Miscalculation is caused due to tile range (5 tiles) being larger
         # than N (number of tiles in zoom level)
-        tile_offset = (tile_offset[0]-1, tile_offset[1]-1)
+        tile_offset = (tile_offset[0] - 1, tile_offset[1] - 1)
     coord = (
         round((xy[0] - xmin - tile_offset[0]) * config["rendering"]["tile_w"]),
         round((xy[1] - ymin - tile_offset[1]) * config["rendering"]["tile_h"]),
