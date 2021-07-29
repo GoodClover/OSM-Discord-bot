@@ -3,4 +3,3 @@ overpy==0.6
 discord.py==1.7.3
 Pillow==8.3.0
 python-dotenv=0.19.0
-

@@ -26,11 +26,14 @@ def test_4():
 
 
 def test_5():
-    assert config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"] > 0 and config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"] > 0
+    assert (
+        config["rendering"]["tiles_x"] - 2 * config["rendering"]["tile_margin_x"] > 0
+        and config["rendering"]["tiles_y"] - 2 * config["rendering"]["tile_margin_y"] > 0
+    )
 
 
 def test_6():
-    assert config["rendering"]["max_note_zoom"]  <= config["rendering"]["max_zoom"]
+    assert config["rendering"]["max_note_zoom"] <= config["rendering"]["max_zoom"]
 
 
 test_1()

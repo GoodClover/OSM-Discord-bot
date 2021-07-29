@@ -1,8 +1,9 @@
 # /bin/python3
 # Functions used for communicating with network services. Mainly getting elements
 # and maybe later servicing tiles and overpass queries (+caching) as well.
-import requests
 from typing import Union
+
+import requests
 
 from configuration import config
 from configuration import guild_ids
