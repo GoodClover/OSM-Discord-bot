@@ -8,11 +8,19 @@
 # tile_margin_x / tile_margin_y - How much free space is left at edges
 # Used in render_elms_on_cluster. List of colours to be cycled.
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
-from config import config
+from configuration import config
 
 import colors
 import network
+import utils
+import requests
+from typing import Optional, Union
+from PIL import Image
+from PIL import ImageDraw  # For drawing elements
+from io import BytesIO
+from discord import Message
 
+# Used in render_elms_on_cluster. List of colours to be cycled.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
 
 if config["symbols"]["note_solved"].startswith("http"):
@@ -56,10 +64,13 @@ class BaseElement:
         # * array of RenderSegment-s (relation)
         # Actually that's pretty much self.type
         self.rendertype = None
-        self.elm = get_elm(elm_type, id, "dicussion" in kwargs and kwargs["dicussion"])
+        self.colour = None  # Use default colour palette
+        self.elm = network.get_elm(elm_type, id, "dicussion" in kwargs and kwargs["dicussion"])
 
     def resolve(self):
-        # Add code for geometry lookup
+        # Add code for geometry lookup.
+        # What this func does: Run overpass or API query to get the element,
+        # Save result as RenderSegment
         self.resolved = True
         pass
 
@@ -95,6 +106,8 @@ class Element(BaseElement):
 
     def resolve(self):
         super().resolve()
+        self.geometry = RenderSegment(self)
+        
 
 
 # The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large; therefore they need to be optimized into something simpler... I have hit multiple walls again.
@@ -105,6 +118,10 @@ class RenderQueue:
     def __init__(self, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
         # Init does nothing but sets up variables and then starts adding elements to lists.
+        # Status message that could be used while downloading elements. Not sure how that would work.
+        self.status_text = ""
+        # Discord message that will be optionaly passed when end user should be seeing bot activity.
+        # self.status_msg
         # Notes have Lat, Lon and Bool for open/closed.
         self.notes = []
         # Changesets are currently drawn as simple rectangles,
@@ -146,9 +163,10 @@ class RenderQueue:
         # to download actual geometry information.
         if self.resolved:
             return
-        for element in self.elements:
-            if not element.resolved:
-                element.resolve()
+        for elements in [self.elements, self.changesets, self.notes]:
+            for element in elements:
+                if not element.resolved:
+                    element.resolve()
         self.resolved = True
 
     def get_bounds(self, segments=True, notes=True) -> tuple[float, float, float, float]:
@@ -229,14 +247,54 @@ class RenderQueue:
         self.preview_area = (zoom, center_lat, center_lon)
         return (zoom, center_lat, center_lon)
 
+    def set_status(self, text):
+        # In more advanced future this function will update actual status message in chat.
+        self.status_text = text
+
 
 class RenderSegment:
+    # Render segment is essentialy everything that can have coordinates (and tags).
+    # Top level RenderSegment is member of RenderQueue and acts as single OSM element.
+    # RenderSegment's primary function is to act as generator for drawing elements 
+    # onto map. Think of abstractation where you init RenderSegment by saying "I want
+    # changeset/1" and it's up to RenderSegment internals to choose if you are getting mere 
+    # bounding box of the first changeset or you get some complex drawing like osmCha does.
+    # Object is structured in a way similar to OSM data model, where coordinates are 
+    # only stored at individual nodes... 
+    
+    # Q: But why do we need separate class then? Just use osmapi module?
+    # A: OsmApi module is still wrapper of OSM API meaning that single query of a way
+    # returns that way only without geographical coordinates data and we would need 
+    # extra queries to get coordinates and tags of all nodes involved.
+    
+    # NB! This class is generated in X.resolve() command, meaning that slow operations are expected.
+    def __init__(self, parent_elm, parent_queue, parent_segment=None, recursion_depth=0):
+        # parent_queue: RenderQueue
+        # parent_elm: BaseElement
+        # parent_segment: Union[RenderSegment, None]
+        self.parent_elm = parent_elm
+        self.parent_segment = parent_segment
+        # If this element is a relation and it has subrelations, then other relations are stored into subsegments and RenderSegments
+        self.subsegments=[]
+        # This is used for ways of the element. Infividual elements are single-node segments.
+        self.segments=[]
+        if parent_elm.type == "relation":
+            output_type = "body"  # Original version
+            if 1 < recursion_depth:
+                output_type = "center"  # Alternative: "bb"
+            Q = "[out:json][timeout:45];relation(id:" + str(elem_id) + ");(._;>;);out " + output_type + ";"
+        if parent_elm.type == "way":
+            Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");(._;>;);out body;"
+        parent_queue.set_status(f"{LOADING_EMOJI} Querying `" + Q + "`")
+        # Above line may introduce error when running it from /element, not on_message.
+        result = overpass_api.query(Q)
+        self.tags = result.something.tags
     def reduce(self):
         # See  def reduce_segment_nodes(segments
         pass
 
     def __add__(self, other_segment):
-        # See  def merge_segments(segments
+        # See  def merge_segments_segments
         pass
 
     def calc_limit(no_of_nodes):
@@ -250,6 +308,26 @@ class RenderSegment:
                 (no_of_nodes - config["render"]["limiter_offset"]) ** (1 / config["render"]["reduction_factor"])
                 + config["render"]["limiter_offset"]
             )
+    def render(self):
+        for x in y:
+            yield x
+
+    @property
+    def colour(self):
+        """Return colour of the object."""
+        for col_tag in sorted(filter(lambda x: "colo" in x, self.tags)):
+            hexcode = colors.try_parse_colour(self.tags[col_tag])
+            if hexcode is not None:
+                print(f"{self}'s tag {col_tag}={self.tags[col_tag]} is parsed as {hexcode}.")
+                return hexcode
+        if self.parent_segment:
+            print(f"{self}'s colour is undefined, using parent segment.")
+            return self.parent_segment.colour
+        else:
+            print(f"{self}'s colour is undefined, using parent element.")
+            return self.parent_elm.colour
+        print(f"{self}'s and all it's parent objects colours are undefined. Resort to deafault colour schema.")
+        return None
 
 
 # Standard part for getting map:
@@ -441,3 +519,157 @@ def merge_segments(segments: list[list[tuple[float, float]]]) -> list[list[tuple
     #     seg_ends[last] = len(segments) - 1
     #     seg_ends[first] = len(segments) - 1
     return segments
+
+
+
+async def elms_to_render(
+    elem_type,
+    elem_id,
+    no_reduction=False,
+    get_bbox=False,
+    recursion_depth=0,
+    status_msg: Optional[Message] = None,
+):
+    # Inputs:   elem_type (node / way / relation)
+    #           elem_id     element's OSM ID as string
+    # Queries OSM element geometry via overpass API.
+    # Example: elms_to_render('relation', '60189')  (Russia)
+    # To be tested with relation 908054 - Public transport network of Sofia.
+    # Possible alternative approach to rendering by creating very rough drawing on bot-side.
+    # Using overpass to query just geometry.
+    # And then draw just very few nodes onto map retrieved by showmap
+    # Even easier alternative is drawing bounding box
+    # Throws IndexError if element was not found
+    # Needs handling for Overpass's over quota error.
+    # Future improvement possibility: include tags into output to control rendering, especially colours.
+    # I have currently odd bug that when get_bbox is fixed to True, all following queries also have bbox.
+
+    get_center = False
+    if elem_type != "relation":
+        get_bbox = False
+    elif 1 < recursion_depth:
+        get_center = True
+    if get_bbox:
+        output_type = "bb"
+    elif get_center:
+        output_type = "center"
+    else:
+        output_type = "skel geom"  # Original version
+    Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");out " + output_type + ";"
+    if status_msg:
+        await status_msg.edit(
+            content=f"{LOADING_EMOJI} Querying `" + Q + "`"
+        )  # I hope this works. uncomment on live instance
+    # Above line may introduce error when running it from /element, not on_message.
+    try:
+        result = overpass_api.query(Q)
+    except exception.OverpassRuntimeError:
+        print("Overpass timeout")
+        if not get_bbox:
+            # recursion_depth is not increased, because this is retry of same element
+            return await elms_to_render(elem_type, elem_id, no_reduction, True, recursion_depth, status_msg=status_msg)
+        else:
+            Q = Q.replace("bb;", "skel center;")
+            get_center = True
+            if status_msg:
+                await status_msg.edit(content=f"{LOADING_EMOJI} Querying `" + Q + "`")
+            result = overpass_api.query(Q)
+    # return result
+    # Since we are querying for single element, top level result will have just 1 element.
+    node_count = 0
+    # Combining all queries together is much faster
+    # Let's say that maximum recursion depth can be 2 levels (EU > Belgium > Counties; Sofia network > Bus line > Bus stops)
+    if get_center:
+        if "center" in result.relations[0].attributes:
+            center = result.relations[0].attributes["center"]
+            return [[(float(center["lat"]), float(center["lon"]))]]
+    elif get_bbox:
+        if "bounds" in result.relations[0].attributes:
+            bound = result.relations[0].attributes["bounds"]
+            # {'minlat': Decimal('59.4'), 'minlon': Decimal('24.6'), 'maxlat': Decimal('59.5'), 'maxlon': Decimal('24.7')
+            return [
+                [
+                    (float(bound["minlat"]), float(bound["minlon"])),
+                    (float(bound["minlat"]), float(bound["maxlon"])),
+                    (float(bound["maxlat"]), float(bound["maxlon"])),
+                    (float(bound["maxlat"]), float(bound["minlon"])),
+                    (float(bound["minlat"]), float(bound["minlon"])),
+                ]
+            ]
+    if elem_type == "relation":
+        segments = []
+        elems = result.relations[0].members
+        prev_last = None
+        for i in range(len(elems)):
+            # Previously it skipped elements based on role, but it was buggy.
+            # New, recursive approach.
+            if type(elems[i]) == overpy.RelationRelation:
+                seg = await elms_to_render(
+                    "relation", elems[i].ref, True, get_bbox, recursion_depth + 1, status_msg=status_msg
+                )
+                segments += seg
+            elif type(elems[i]) == overpy.RelationNode:  # Single node as member of relation
+                segments.append([(float(elems[i].attributes["lat"]), float(elems[i].attributes["lon"]))])
+            elif type(elems[i]) == overpy.RelationWay:
+                geom = elems[i].geometry
+                segments.append(list(map(lambda x: (float(x.lat), float(x.lon)), geom)))
+    elif elem_type == "way":
+        elems = result.ways[0]
+        segments = [
+            list(map(lambda x: (float(x.lat), float(x.lon)), elems.get_nodes(True)))
+        ]  # True means resolving node references.
+    elif elem_type == "node":
+        # Creates simply a single-node segment.
+        segments = [[(float(result.nodes[0].lat), float(result.nodes[0].lon))]]
+    else:  # If encountered unknown element type.
+        return []
+    if no_reduction:
+        return segments
+    # segments=merge_segments(segments)
+    segments = reduce_segment_nodes(segments)
+    # We now have list of lists of (lat, lon) coordinates to be rendered.
+    # These lists of segments can be joined, if multiple elements are requested
+    # In order to add support for colours, just create segment-colour pairs.
+    return segments
+
+
+def get_render_queue_bounds(
+    segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []
+) -> tuple[float, float, float, float]:
+    # Finds bounding box of rendering queue (segments)
+    # Rendering queue is bunch of coordinates that was calculated in previous function.
+    min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
+    precision = 5  # https://xkcd.com/2170/
+    for segment in segments:
+        for coordinates in segment:
+            lat, lon = coordinates
+            # int() because type checker is an idiot
+            # Switching it to int kills the whole renderer!
+            if lat > max_lat:
+                max_lat = round(lat, precision)
+            if lat < min_lat:
+                min_lat = round(lat, precision)
+            if lon > max_lon:
+                max_lon = round(lon, precision)
+            if lon < min_lon:
+                min_lon = round(lon, precision)
+    for note in notes:
+        lat, lon, solved = note
+        # int() because type checker is an idiot
+        # Switching it to int kills the whole renderer!
+        if lat > max_lat:
+            max_lat = round(lat, precision)
+        if lat < min_lat:
+            min_lat = round(lat, precision)
+        if lon > max_lon:
+            max_lon = round(lon, precision)
+        if lon < min_lon:
+            min_lon = round(lon, precision)
+    if min_lat == max_lat:  # In event when all coordinates are same...
+        min_lat -= 10 ** (-precision)
+        max_lat += 10 ** (-precision)
+    if min_lon == max_lon:  # Add small variation to not end up in ZeroDivisionError
+        min_lon -= 10 ** (-precision)
+        max_lon += 10 ** (-precision)
+    return (min_lat, max_lat, min_lon, max_lon)
+

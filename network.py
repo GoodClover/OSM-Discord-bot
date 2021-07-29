@@ -2,12 +2,13 @@
 # Functions used for communicating with network services. Mainly getting elements
 # and maybe later servicing tiles and overpass queries (+caching) as well.
 import requests
+from typing import Union
 
 from configuration import config
 from configuration import guild_ids
 
 
-def get_elm(elm_type: str, elm_id: str | int, get_discussion: bool = False) -> dict:
+def get_elm(elm_type: str, elm_id: Union[int, str], get_discussion: bool = False) -> dict:
     # New, unified element query function.
     suffix = ""
     if get_discussion and elm_type == "changeset":

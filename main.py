@@ -23,6 +23,7 @@ import overpy
 import requests
 from discord import AllowedMentions
 from discord import Client
+from discord.ext import commands
 from discord import Embed
 from discord import File
 from discord import Guild
@@ -43,16 +44,17 @@ from PIL import ImageDraw  # For drawing elements
 
 import regexes
 import utils
+import network
+import render
 from configuration import config
 from configuration import guild_ids
 from utils import *  # Backup for cases when utils.* prefix was not added yet.
 
 ## SETUP ##
-cached_files: set = (
-    set()
-)  # Global set of saved filenames. If on_message fails, it will remove cached files in way similar to /googlebad.
-recent_googles: set = set()  # Set of unix timestamps.
-command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
+# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+cached_files: set = set()
+# Set of unix timestamps.
+recent_googles: set = set()
 
 
 overpass_api = overpy.Overpass(url=config["overpass_url"])
@@ -73,14 +75,15 @@ with open(config["ohno_file"], "r", encoding="utf8") as file:
 with open(config["josm_tips_file"], "r", encoding="utf8") as file:
     josm_tips = [entry for entry in file.read().split("\n\n") if entry != ""]
 
-client = Client(
+client = commands.Bot(
     intents=Intents.all(),
+        command_prefix='?',
     allowed_mentions=AllowedMentions(
         # I also use checks elsewhere to prevent @ injection.
         everyone=False,
         users=True,
         roles=False,
-        replied_user=False,
+        replied_user=False
     ),
 )
 slash = SlashCommand(client, sync_commands=True)
@@ -136,11 +139,11 @@ async def quota_command(ctx: SlashContext) -> None:
         list(
             map(
                 lambda x: f'Command available in {round(x+config["rate_limit"]["time_period"]-tnow)} sec.',
-                sorted(command_history[ctx.author_id]),
+                sorted(utils.command_history[ctx.author_id]),
             )
         )
     )
-    msg += f'\nYou can still send {config["rate_limit"]["max_calls"]-len(command_history[ctx.author_id])} actions to this bot.'
+    msg += f'\nYou can still send {config["rate_limit"]["max_calls"]-len(utils.command_history[ctx.author_id])} actions to this bot.'
     await ctx.send(msg, hidden=True)
 
 
@@ -326,7 +329,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
         return
 
     try:
-        elm = get_elm(elm_type, elm_id)
+        elm = network.get_elm(elm_type, elm_id)
     except ValueError as error_message:
         await ctx.send(error_message, hidden=True)
         return
@@ -511,7 +514,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
             return
 
     try:
-        changeset = get_changeset(changeset_id, "discussion" in extras)
+        changeset = network.get_elm("changeset", changeset_id, "discussion" in extras)
     except ValueError as error_message:
         await ctx.send(error_message, hidden=True)
         return
@@ -643,7 +646,7 @@ async def note_command(ctx: SlashContext, note_id: str, extras: str = "") -> Non
             return
 
     try:
-        note = get_note(note_id)
+        note = network.get_elm("note", note_id)
     except ValueError as error_message:
         await ctx.send(error_message, hidden=True)
         return
@@ -746,7 +749,7 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
         # Both will raise ValueError if the user isn't found, get_id_from_username will usually error first.
         # In cases where the account was only removed recently, get_user will error.
         user_id = get_id_from_username(username)
-        user = get_user(user_id)
+        user = network.get_elm("user", user_id)
     except ValueError as error_message:
         await ctx.send(error_message, hidden=True)
         return
@@ -946,7 +949,7 @@ async def elms_to_render(
     if no_reduction:
         return segments
     # segments=merge_segments(segments)
-    segments = reduce_segment_nodes(segments)
+    segments = render.reduce_segment_nodes(segments)
     # We now have list of lists of (lat, lon) coordinates to be rendered.
     # These lists of segments can be joined, if multiple elements are requested
     # In order to add support for colours, just create segment-colour pairs.
@@ -987,7 +990,7 @@ async def get_image_cluster(
 
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
-    tile_range = get_image_tile_range(lat_deg, lon_deg, zoom)
+    tile_range = render.get_image_tile_range(lat_deg, lon_deg, zoom)
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
@@ -1149,7 +1152,7 @@ async def on_message(msg: Message) -> None:
     utils.check_rate_limit(author_id, -config["rate_limit"]["time_period"] - 1)  # Refresh command history
     if queried_elements_count == 0:
         return
-    elif queried_elements_count > config["rate_limit"]["max_elements"] - len(command_history[author_id]):
+    elif queried_elements_count > config["rate_limit"]["max_elements"] - len(utils.command_history[author_id]):
         # If there are too many elements, just ignore. Sending hidden normal messages is unsupported.
         # msg.channel.send("You can't query that many elements.", hidden=True)
         return
@@ -1187,7 +1190,7 @@ async def on_message(msg: Message) -> None:
                 await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{elm_id}.")
                 try:
                     if add_embedded:
-                        embeds.append(elm_embed(get_elm(elm_type, elm_id)))
+                        embeds.append(elm_embed(network.get_elm(elm_type, elm_id)))
                     if add_image:
                         render_queue += await elms_to_render(elm_type, elm_id, status_msg=status_msg)
                 except ValueError as error_message:
@@ -1198,7 +1201,7 @@ async def on_message(msg: Message) -> None:
             for changeset_id in changeset_ids:
                 await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{changeset_id}.")
                 try:
-                    changeset = get_changeset(changeset_id)
+                    changeset = network.get_elm("changeset", changeset_id)
                     if add_embedded:
                         embeds.append(changeset_embed(changeset))
                     if add_image:
@@ -1212,7 +1215,7 @@ async def on_message(msg: Message) -> None:
             for note_id in note_ids:
                 await status_msg.edit(content=f"{LOADING_EMOJI} Processing {elm_type}/{note_id}.")
                 try:
-                    note = get_note(note_id)
+                    note = network.get_elm("note",note_id)
                     if add_embedded:
                         embeds.append(note_embed(note))
                     if add_image:
@@ -1267,7 +1270,7 @@ async def on_message(msg: Message) -> None:
         for username in users:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing user/{username}.")
             try:
-                embeds.append(user_embed(get_user(get_id_from_username(username))))
+                embeds.append(user_embed(network.get_elm("user", get_id_from_username(username))))
             except ValueError as error_message:
                 errorlog.append(("user", username, error_message))
 

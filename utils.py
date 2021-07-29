@@ -1,18 +1,22 @@
 # /bin/python3
 # Utility functions, such as coordinate calculations or data transformations.
-import math
+import math, time
 from datetime import datetime
-from typing import Union
+from typing import Union, Dict, Tuple, Optional
 
 from discord import Guild
-from discord import Member
+from discord import Member, Message
+from discord_slash.model import SlashMessage
 
+import regexes
 from configuration import config
 from configuration import guild_ids
 
-## UTILS ##
 
-command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting
+
+## UTILS ##
+# Global per-user dictionary of sets to keep track of rate-limiting
+command_history: dict = dict()
 
 
 def is_powerful(member: Member, guild: Guild) -> bool:
@@ -30,10 +34,9 @@ def sanitise(text: str) -> str:
 
 
 def get_suffixed_tag(
-    tags: dict[str, str],
+    tags: Dict[str, str],
     key: str,
-    suffix: str,
-) -> tuple[str, str] | tuple[None, None]:
+    suffix: str) -> Tuple[Optional[str], Optional[str]]:
     # Looks like two style checkers tend to disagree on argument whitespacing.
     suffixed_key = key + suffix
     if suffixed_key in tags:
@@ -56,27 +59,27 @@ def date_to_mention(date: datetime) -> str:
     return f"<t:{int(date.timestamp())}>"
 
 
-def frag_to_bits(URL: str) -> tuple[int, float, float]:
-    matches = re.findall(regexes.MAP_FRAGEMT_CAPTURING, URL)
+def frag_to_bits(URL: str) -> Tuple[int, float, float]:
+    matches = regexes.re.findall(regexes.MAP_FRAGEMT_CAPTURING, URL)
     if len(matches) != 1:
         raise ValueError("Invalid map fragment URL.")
     zoom, lat, lon = matches[0]
     return int(zoom), float(lat), float(lon)
 
 
-def bits_to_frag(match: tuple[int, float, float]) -> str:
+def bits_to_frag(match: Tuple[int, float, float]) -> str:
     zoom, lat, lon = match
     return f"#map={zoom}/{lat}/{lon}"
 
 
-def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
+def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int, int]:
     # Previously this function was same as deg2tile_float, but output was rounded down.
     # Rounded in this way as type checher was throwing a fit at map() having unknown length
     x, y = deg2tile_float(lat_deg, lon_deg, zoom)
     return int(x), int(y)
 
 
-def tile2deg(zoom: int, x: int, y: int) -> tuple[float, float]:
+def tile2deg(zoom: int, x: int, y: int) -> Tuple[float, float]:
     """Get top-left coordinate of a tile."""
     lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
     lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
@@ -87,7 +90,7 @@ def tile2deg(zoom: int, x: int, y: int) -> tuple[float, float]:
     return (lat, lng)
 
 
-def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, float]:
+def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[float, float]:
     # This is not really supposed to work, but it works.
     # By removing rounding down from deg2tile function, we can estimate
     # position where to draw coordinates during element export.
@@ -104,9 +107,9 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
 
 
 def wgs2pixel(
-    xy: tuple[float | int, float | int],
-    tile_range: tuple[int, int, int, int, tuple[float, float]],
-    frag: tuple[int, float, float],
+    xy: Tuple[float, float],
+    tile_range: Tuple[int, int, int, int, Tuple[float, float]],
+    frag: Tuple[int, float, float],
 ):
     """Convert geographical coordinates to X-Y coordinates to be used on map."""
     # Tile range is calculated in get_image_tile_range
@@ -138,7 +141,7 @@ def format_discussions(conversation_json):
     comments = []
     for comment in conversation_json:
         # Remove excessive whitespace and duplicate rows, add quote markdown to each line.
-        formatted_comment = "> " + re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
+        formatted_comment = "> " + regexes.re.sub(r"\s*\n\s*", "\n> ", comment["text"]).strip()
         # TODO: Add some formatting handling due to markdown/html
         if "action" in comment:
             formatted_footer = (
