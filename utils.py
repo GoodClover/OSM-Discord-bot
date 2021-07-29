@@ -1,17 +1,21 @@
 # /bin/python3
 # Utility functions, such as coordinate calculations or data transformations.
-import math, time
+import math
+import time
 from datetime import datetime
-from typing import Union, Dict, Tuple, Optional
+from typing import Dict
+from typing import Optional
+from typing import Tuple
+from typing import Union
 
 from discord import Guild
-from discord import Member, Message
+from discord import Member
+from discord import Message
 from discord_slash.model import SlashMessage
 
 import regexes
 from configuration import config
 from configuration import guild_ids
-
 
 
 ## UTILS ##
@@ -33,10 +37,7 @@ def sanitise(text: str) -> str:
     return text
 
 
-def get_suffixed_tag(
-    tags: Dict[str, str],
-    key: str,
-    suffix: str) -> Tuple[Optional[str], Optional[str]]:
+def get_suffixed_tag(tags: Dict[str, str], key: str, suffix: str) -> Tuple[Optional[str], Optional[str]]:
     # Looks like two style checkers tend to disagree on argument whitespacing.
     suffixed_key = key + suffix
     if suffixed_key in tags:

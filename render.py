@@ -7,18 +7,19 @@
 # tiles_x/tiles_y - Dimensions of output map fragment
 # tile_margin_x / tile_margin_y - How much free space is left at edges
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
-from configuration import config
+from io import BytesIO
+from typing import Optional
+from typing import Union
 
 import requests
+from discord import Message
+from PIL import Image
+from PIL import ImageDraw  # For drawing elements
+
 import colors
 import network
 import utils
-import requests
-from typing import Optional, Union
-from PIL import Image
-from PIL import ImageDraw  # For drawing elements
-from io import BytesIO
-from discord import Message
+from configuration import config
 
 # Used in render_elms_on_cluster. List of colours to be cycled.
 element_colors = ["#000", "#700", "#f00", "#070", "#0f0", "#f60"]
@@ -107,7 +108,6 @@ class Element(BaseElement):
     def resolve(self):
         super().resolve()
         self.geometry = RenderSegment(self)
-        
 
 
 # The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large; therefore they need to be optimized into something simpler... I have hit multiple walls again.
@@ -254,18 +254,18 @@ class RenderQueue:
 class RenderSegment:
     # Render segment is essentialy everything that can have coordinates (and tags).
     # Top level RenderSegment is member of RenderQueue and acts as single OSM element.
-    # RenderSegment's primary function is to act as generator for drawing elements 
+    # RenderSegment's primary function is to act as generator for drawing elements
     # onto map. Think of abstractation where you init RenderSegment by saying "I want
-    # changeset/1" and it's up to RenderSegment internals to choose if you are getting mere 
+    # changeset/1" and it's up to RenderSegment internals to choose if you are getting mere
     # bounding box of the first changeset or you get some complex drawing like osmCha does.
-    # Object is structured in a way similar to OSM data model, where coordinates are 
-    # only stored at individual nodes... 
-    
+    # Object is structured in a way similar to OSM data model, where coordinates are
+    # only stored at individual nodes...
+
     # Q: But why do we need separate class then? Just use osmapi module?
     # A: OsmApi module is still wrapper of OSM API meaning that single query of a way
-    # returns that way only without geographical coordinates data and we would need 
+    # returns that way only without geographical coordinates data and we would need
     # extra queries to get coordinates and tags of all nodes involved.
-    
+
     # NB! This class is generated in X.resolve() command, meaning that slow operations are expected.
     def __init__(self, parent_elm, parent_queue, parent_segment=None, recursion_depth=0):
         # parent_queue: RenderQueue
@@ -274,9 +274,9 @@ class RenderSegment:
         self.parent_elm = parent_elm
         self.parent_segment = parent_segment
         # If this element is a relation and it has subrelations, then other relations are stored into subsegments and RenderSegments
-        self.subsegments=[]
+        self.subsegments = []
         # This is used for ways of the element. Infividual elements are single-node segments.
-        self.segments=[]
+        self.segments = []
         if parent_elm.type == "relation":
             output_type = "body"  # Original version
             if 1 < recursion_depth:
@@ -288,6 +288,7 @@ class RenderSegment:
         # Above line may introduce error when running it from /element, not on_message.
         result = overpass_api.query(Q)
         self.tags = result.something.tags
+
     def reduce(self):
         # See  def reduce_segment_nodes(segments
         pass
@@ -307,6 +308,7 @@ class RenderSegment:
                 (no_of_nodes - config["render"]["limiter_offset"]) ** (1 / config["render"]["reduction_factor"])
                 + config["render"]["limiter_offset"]
             )
+
     def render(self):
         for x in y:
             yield x
@@ -527,7 +529,6 @@ def merge_segments(segments: list[list[tuple[float, float]]]) -> list[list[tuple
     return segments
 
 
-
 async def elms_to_render(
     elem_type,
     elem_id,
@@ -678,4 +679,3 @@ def get_render_queue_bounds(
         min_lon -= 10 ** (-precision)
         max_lon += 10 ** (-precision)
     return (min_lat, max_lat, min_lon, max_lon)
-
