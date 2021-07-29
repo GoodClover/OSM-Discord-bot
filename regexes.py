@@ -2,7 +2,7 @@
 import re
 
 SS = r"(?<!\/|\w)"  # Safe Start
-SE = r"(?!\/|\w)"  # Safe End
+SE = r"(?!\/|\w|[\.\?\!\)])"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
 USERNAME = r"[\w\-_]+"

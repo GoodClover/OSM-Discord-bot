@@ -63,8 +63,8 @@ INSPECT_EMOJI = config["emoji"]["inspect"]  # :mag_right:
 IMAGE_EMOJI = config["emoji"]["image"]  # :frame_photo:
 EMBEDDED_EMOJI = config["emoji"]["embedded"]  # :bed:
 CANCEL_EMOJI = config["emoji"]["cancel"]  # :x:
-DELETE_EMOJI = config["emoji"]["inspect"]  # :wastebasket:
-LOADING_EMOJI = config["emoji"]["delete"]  # :loading:
+DELETE_EMOJI = config["emoji"]["delete"]  # :wastebasket:
+LOADING_EMOJI = config["emoji"]["loading"]  # :loading:
 LEFT_SYMBOL = config["emoji"]["left"]  # "←"
 RIGHT_SYMBOL = config["emoji"]["right"]  # "→"
 CANCEL_SYMBOL = config["emoji"]["cancel_utf"]  # "✘"
@@ -710,7 +710,7 @@ def note_embed(note: dict, extras: Iterable[str] = []) -> Embed:
         # Example: *- User opened on 2020-04-14 08:00*
         embed.description += utils.format_discussions(note["properties"]["comments"])
     if creator != "*Anonymous*":
-        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator}/notes)"
+        embed.description += f"[Other notes by {creator}.](https://www.openstreetmap.org/user/{creator.replace(' ', '%20'}/notes)"
     return embed
 
 
@@ -747,7 +747,7 @@ async def user_command(ctx: SlashContext, username: str, extras: str = "") -> No
 
     try:
         # Both will raise ValueError if the user isn't found, get_id_from_username will usually error first.
-        # In cases where the account was only removed recently, get_user will error.
+        # In cases where the account was only removed recently, getting user will error.
         user_id = get_id_from_username(username)
         user = network.get_elm("user", user_id)
     except ValueError as error_message:
@@ -1132,7 +1132,8 @@ async def on_message(msg: Message) -> None:
     if regexes.POTLATCH.findall(msg.clean_content):
         await msg.add_reaction(config["emoji"]["sirens"])
         await msg.add_reaction(config["emoji"]["potlatch"])
-    # When bot is mentioned. Difference below is exclamation mark (!)
+    # When bot is mentioned, react with robot emoji to quickly test, if bot is online.
+    # Difference between two sides if "or" below is exclamation mark (!) in later condition.
     if f"<@{client.user.id}>" in msg.raw_mentions or f"<@!{client.user.id}>" in msg.raw_mentions:
         await msg.add_reaction(config["emoji"]["bot"])
 
@@ -1369,7 +1370,6 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
 __**New suggestion posted**__
 By: <@!{ctx.author.id}>, {utils.date_to_mention(datetime.now())}
 > {suggestion}
-
 Vote with {config['emoji']['vote_yes']}, {config['emoji']['vote_abstain']} and {config['emoji']['vote_no']}.
 """
     )
