@@ -968,7 +968,7 @@ async def get_image_cluster(
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
     tile_range = render.get_image_tile_range(lat_deg, lon_deg, zoom)
-    # print(tile_range)
+    print(tile_range)
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
@@ -1258,6 +1258,7 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")
+            print(f"\n\nProcessing {map_frag}.")
             zoom, lat, lon = utils.frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors

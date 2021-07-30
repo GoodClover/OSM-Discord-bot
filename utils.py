@@ -104,7 +104,11 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[float, fl
     if lat_deg <= -89:
         return (xtile, n - 1)
     ytile = (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n
-    return (xtile, max(min(n - 1, ytile), 0))
+    limited_ytile = max(min(n, ytile), 0)
+    print(f"deg2tile_float{(lat_deg, lon_deg, zoom)}")
+    print("ytile limits (before after):", ytile, limited_ytile)
+    print(f"Returns: {(xtile,  limited_ytile)}")
+    return (xtile, limited_ytile)
 
 
 def wgs2pixel(

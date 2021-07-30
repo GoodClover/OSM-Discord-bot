@@ -386,9 +386,9 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = utils.deg2tile_float(lat_deg, lon_deg, zoom)
-    # print("Center X/Y:", center_x, center_y)
+    print("Center X/Y:", center_x, center_y)
     xmin, xmax = int(center_x - config["rendering"]["tiles_x"] / 2), int(center_x + config["rendering"]["tiles_x"] / 2)
-    # print("X min/max:", xmin, xmax)
+    print("X min/max:", xmin, xmax)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     if config["rendering"]["tiles_x"] % 2 == 0:
         xmax -= 1
@@ -401,20 +401,24 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     # ymin = max(ymin, 0)
     # ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
+    # Constant offset: if map is odd number of tiles wide, 
+    #  offset will be increased by half of a tile.
     print("Tile offset calculation")
     print(
-        center_x,
-        config["rendering"]["tiles_x"],
+        "center_x:",center_x,
+        "\nConstant X offset:",config["rendering"]["tiles_x"],
+        "\nConstant Y offset:",((config["rendering"]["tiles_y"] % 2) / 2) % 1,
         config["rendering"]["tiles_x"] % 2,
         (config["rendering"]["tiles_x"] % 2) / 2,
-        (center_x + (config["rendering"]["tiles_x"] % 2) / 2),
+        "\nCenter_X + constant offset:",(center_x + (config["rendering"]["tiles_x"] % 2) / 2),
     )
     tile_offset = (
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
-        (center_y + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
+        (center_y + (config["rendering"]["tiles_y"] % 2) / 2) % 1,
     )
     # tile_offset = 0,0
-    print("Offset:", tile_offset)
+    print("Offset (X/Y, Lon/Lat):", tile_offset)
+    print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}")
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
