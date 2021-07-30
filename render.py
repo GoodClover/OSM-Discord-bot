@@ -401,16 +401,20 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     # ymin = max(ymin, 0)
     # ymax = min(ymax, n)
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
-    # Constant offset: if map is odd number of tiles wide, 
+    # Constant offset: if map is odd number of tiles wide,
     #  offset will be increased by half of a tile.
     print("Tile offset calculation")
     print(
-        "center_x:",center_x,
-        "\nConstant X offset:",config["rendering"]["tiles_x"],
-        "\nConstant Y offset:",((config["rendering"]["tiles_y"] % 2) / 2) % 1,
+        "center_x:",
+        center_x,
+        "\nConstant X offset:",
+        config["rendering"]["tiles_x"],
+        "\nConstant Y offset:",
+        ((config["rendering"]["tiles_y"] % 2) / 2) % 1,
         config["rendering"]["tiles_x"] % 2,
         (config["rendering"]["tiles_x"] % 2) / 2,
-        "\nCenter_X + constant offset:",(center_x + (config["rendering"]["tiles_x"] % 2) / 2),
+        "\nCenter_X + constant offset:",
+        (center_x + (config["rendering"]["tiles_x"] % 2) / 2),
     )
     tile_offset = (
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
