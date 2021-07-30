@@ -969,7 +969,7 @@ async def get_image_cluster(
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
     tile_range = render.get_image_tile_range(lat_deg, lon_deg, zoom)
-    utils.print2(tile_range,lvl=3)
+    utils.print2(tile_range, lvl=3)
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []

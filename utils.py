@@ -3,7 +3,8 @@
 import math
 import time
 from datetime import datetime
-from inspect import getframeinfo, stack
+from inspect import getframeinfo
+from inspect import stack
 from typing import Dict
 from typing import Optional
 from typing import Tuple
@@ -137,7 +138,7 @@ def tile2pixel(xy, zoom, tile_range):
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     print2("Tile2Pixel input:", xy, zoom, tile_range, lvl=3)
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    print2("output:",(xy[0] - xmin - tile_offset[0]), (xy[1] - ymin - tile_offset[1]), lvl=3)
+    print2("output:", (xy[0] - xmin - tile_offset[0]), (xy[1] - ymin - tile_offset[1]), lvl=3)
     if zoom < 3:
         # I don't know how to fix low-zoom offset error, but this might help
         # Miscalculation is caused due to tile range (5 tiles) being larger
@@ -181,33 +182,31 @@ def check_rate_limit(user, extra=0):
     if len(command_history[user]) > config["rate_limit"]["max_calls"]:
         return False
     return True
-    
+
 
 def print2(*args, **kwargs):
     # https://stackoverflow.com/questions/24438976
     """
     Special wrapper for printing with debug capability.
-    
+
     Adds file and line number information to beginning of every print statement.
     In a way basically similar to verbose logging solutions, config["debug_level"]
     is now used to optionally hide some debugging messages from console without commenting.
     """
     caller = getframeinfo(stack()[1][0])
     if "lvl" in kwargs and type(kwargs["lvl"]) == int:
-    	kwargs["level"] = kwargs["lvl"]
-    	kwargs.pop("lvl")
+        kwargs["level"] = kwargs["lvl"]
+        kwargs.pop("lvl")
     if not ("level" in kwargs and type(kwargs["level"]) == int):
-    	kwargs["level"] = 0
+        kwargs["level"] = 0
     if kwargs["level"] > config["debug_level"]:
         return
     if config["debug_level"] >= 7:
-        c=-1
+        c = -1
         for ln in stack()[1:]:
-            c+=1
-            caller2=getframeinfo(ln[0])
-            print(" "*c, c, f"{caller2.filename}:{caller2.lineno} in {caller2.function}")
+            c += 1
+            caller2 = getframeinfo(ln[0])
+            print(" " * c, c, f"{caller2.filename}:{caller2.lineno} in {caller2.function}")
     kwargs.pop("level")
     print(f"{caller.filename}:{caller.lineno} - ", end="")
     print(*args, **kwargs)
-
-

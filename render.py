@@ -415,14 +415,17 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
         (config["rendering"]["tiles_x"] % 2) / 2,
         "\nCenter_X + constant offset:",
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2),
-    	lvl=4)
+        lvl=4,
+    )
     tile_offset = (
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
         (center_y + (config["rendering"]["tiles_y"] % 2) / 2) % 1,
     )
     # tile_offset = 0,0
     utils.print("Offset (X/Y, Lon/Lat):", tile_offset, lvl=2)
-    utils.print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3)
+    utils.print(
+        f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3
+    )
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
