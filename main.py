@@ -306,6 +306,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     try:
         elm = network.get_elm(elm_type, elm_id)
     except ValueError as error_message:
+        utils.print2(error_message, lvl=3)
         await ctx.send(error_message, hidden=True)
         return
     files = []
@@ -322,7 +323,7 @@ async def elm_command(ctx: SlashContext, elm_type: str, elm_id: str, extras: str
     embed = elm_embed(elm, extras_list)
     file = None
     if "map" in extras_list:
-        print("attachment://" + filename2.split("/")[-1])
+        utils.print2("attachment://" + filename2.split("/")[-1], lvl=1)
         embed.set_image(url="attachment://" + filename2.split("/")[-1])
         file = File(filename2)
     await ctx.send(embed=embed, file=file)
@@ -508,7 +509,7 @@ async def changeset_command(ctx: SlashContext, changeset_id: str, extras: str = 
     embed = changeset_embed(changeset, extras_list)
     file = None
     if "map" in extras_list:
-        print("attachment://" + filename2.split("/")[-1])
+        utils.print2("attachment://" + filename2.split("/")[-1], lvl=1)
         embed.set_image(url="attachment://" + filename2.split("/")[-1])
         file = File(filename2)
     await ctx.send(embed=embed, file=file)
@@ -944,7 +945,7 @@ async def _get_image_cluster__get_image(
     tile_range: tuple,
 ) -> None | tuple[str, str, Exception]:
     url = tile_url.format(zoom=zoom, x=xtile_corrected, y=ytile)
-    # print(f"Requesting: {url}")
+    utils.print2(f"Requesting: {url}", lvl=4)
     try:
         res = await session.get(url, headers=config["rendering"]["HEADERS"])
         data = await res.content.read()
@@ -954,7 +955,7 @@ async def _get_image_cluster__get_image(
         )
         return None
     except Exception as e:
-        print(e)
+        utils.print2(e, lvl=4)
         return ("map tile", url, e)
 
 
@@ -968,7 +969,7 @@ async def get_image_cluster(
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
     tile_range = render.get_image_tile_range(lat_deg, lon_deg, zoom)
-    print(tile_range)
+    utils.print2(tile_range,lvl=3)
     xmin, xmax, ymin, ymax, tile_offset = tile_range
 
     errorlog = []
@@ -1222,7 +1223,7 @@ async def on_message(msg: Message) -> None:
             )
             # Next step is to calculate map area for render.
             await status_msg.edit(content=f"{LOADING_EMOJI} Downloading map tiles")
-            bbox = get_render_queue_bounds(render_queue, notes_render_queue)
+            bbox = render.get_render_queue_bounds(render_queue, notes_render_queue)
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
                 zoom = min([zoom, config["rendering"]["max_note_zoom"]])

@@ -301,12 +301,12 @@ class RenderSegment:
         # Excel equivalent is =IF(A1<50;A1;SQRT(A1-50)+50)
         # Limiter_offset - Minimum number of nodes.
         # Reduction_factor - n-th root by which array length is reduced.
-        if no_of_nodes < config["render"]["limiter_offset"]:
+        if no_of_nodes < config["rendering"]["limiter_offset"]:
             return no_of_nodes
         else:
             return int(
-                (no_of_nodes - config["render"]["limiter_offset"]) ** (1 / config["render"]["reduction_factor"])
-                + config["render"]["limiter_offset"]
+                (no_of_nodes - config["rendering"]["limiter_offset"]) ** (1 / config["rendering"]["reduction_factor"])
+                + config["rendering"]["limiter_offset"]
             )
 
     def render(self):
@@ -362,7 +362,7 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     for seg_num in range(len(segments)):
         segment = segments[seg_num]  # For each segment
         seg_len = len(segment)
-        limit = calc_limit(seg_len)  # Get number of nodes allowed
+        limit = RenderSegment.calc_limit(seg_len)  # Get number of nodes allowed
         step = seg_len / limit  # Average number of nodes to be skipped
         position = 0
         temp_array = []
