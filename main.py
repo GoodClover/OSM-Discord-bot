@@ -985,7 +985,7 @@ async def get_image_cluster(
     async with aiohttp.ClientSession() as session:
         tasks = []
         for xtile in range(xmin - 1, xmax + 2):
-            # print(xtile, xtile % n)
+            utils.print2(xtile, xtile % n, lvl=4)
             xtile_corrected = xtile % n  # Repeats tiles across -180/180 meridian.
             # Xtile is preserved, because it's used for plotting tile on image cluster,
             # While xtile_corrected value is by N smaller and used for requesting tile from web.
@@ -1008,7 +1008,7 @@ async def get_image_cluster(
             if err is not None:
                 errorlog.append(err)
 
-    print(f"Download + paste: {round(time.time()-t, 1)}s")
+    utils.print2(f"Download + paste: {round(time.time()-t, 1)}s", lvl=1)
     filename: str = config["map_save_file"].format(t=time.time())
     cluster.save(filename)
     return cluster, filename, errorlog
@@ -1076,7 +1076,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     if msg.author == client.user:  # Ensure message was created by the bot
         # Powerful users can delete anything
         if is_powerful(payload.member, client.get_guild(payload.guild_id)):
-            print(f"{payload.user_id} deleted following message:\n```{msg.content}```")
+            utils.print2(f"{payload.user_id} deleted following message:\n```{msg.content}```", lvl=0)
             await msg.delete()
 
             # msg.reference.fail_if_not_exists dosen't appear to work correctly.
@@ -1088,7 +1088,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             #         else await msg.channel.fetch_message(msg.reference.message_id)
             #     )
             #     if ref_msg.author == payload.member:
-            #         print(2)
+            #         utils.print2(2, lvl=3)
             #         await msg.delete()
 
 
@@ -1148,7 +1148,9 @@ async def on_message(msg: Message) -> None:
     wait_for_user_start = time.time()
     if ask_confirmation:
         add_image, add_embedded = await ask_render_confirmation(msg)
-        print(add_image)
+        utils.print2("User confirmed to add image:", add_image, lvl=2)
+    utils.print2("Following will be processed:", end="\n   ", lvl=4)
+    print(*(elms + notes + changesets), sep="\n   ")
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
     # User quota is checked after they confirmed element lookup.
@@ -1213,7 +1215,7 @@ async def on_message(msg: Message) -> None:
         if time_spent > 15:
             # Most direct way to assess difficulty of user's request.
             utils.check_rate_limit(author_id, time_spent)
-        print(f"Script spent {time_spent} sec on downloading elements.")
+        utils.print2(f"Script spent {time_spent} sec on downloading elements.", lvl=1)
         msg_arrived = time.time()
         if render_queue or notes_render_queue:
             # Add extra to quota for querying large relations
@@ -1227,7 +1229,7 @@ async def on_message(msg: Message) -> None:
             zoom, lat, lon = calc_preview_area(bbox)
             if notes_render_queue:
                 zoom = min([zoom, config["rendering"]["max_note_zoom"]])
-            print(zoom, lat, lon, sep="/")
+            utils.print2(zoom, lat, lon, sep="/", lvl=2)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             cached_files.add(filename)
             errorlog += errors
@@ -1259,7 +1261,7 @@ async def on_message(msg: Message) -> None:
 
         for map_frag in map_frags:
             await status_msg.edit(content=f"{LOADING_EMOJI} Processing {map_frag}.")
-            print(f"\n\nProcessing {map_frag}.")
+            utils.print2(f"\n\nProcessing {map_frag}.", lvl=2)
             zoom, lat, lon = utils.frag_to_bits(map_frag)
             cluster, filename, errors = await get_image_cluster(lat, lon, zoom)
             errorlog += errors
@@ -1295,7 +1297,7 @@ async def on_message(msg: Message) -> None:
         if time_spent > 10:
             # Most direct way to assess difficulty of user's request.
             utils.check_rate_limit(author_id, time_spent)
-        print(f"Script spent {time_spent} sec on preparing output (render, embeds, files, errors).")
+        utils.print2(f"Script spent {time_spent} sec on preparing output (render, embeds, files, errors).", 1)
 
     # Clean up files
     for filename in cached_files:

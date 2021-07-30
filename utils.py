@@ -3,6 +3,7 @@
 import math
 import time
 from datetime import datetime
+from inspect import getframeinfo, stack
 from typing import Dict
 from typing import Optional
 from typing import Tuple
@@ -18,7 +19,10 @@ from configuration import config
 from configuration import guild_ids
 
 
+# REMEMBER! This module defines debugging printing in function print2
+
 ## UTILS ##
+
 # Global per-user dictionary of sets to keep track of rate-limiting
 command_history: dict = dict()
 
@@ -105,9 +109,9 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[float, fl
         return (xtile, n - 1)
     ytile = (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n
     limited_ytile = max(min(n, ytile), 0)
-    print(f"deg2tile_float{(lat_deg, lon_deg, zoom)}")
-    print("ytile limits (before after):", ytile, limited_ytile)
-    print(f"Returns: {(xtile,  limited_ytile)}")
+    print2(f"deg2tile_float{(lat_deg, lon_deg, zoom)}", lvl=4)
+    print2("ytile limits (before after):", ytile, limited_ytile, lvl=5)
+    print2(f"Returns: {(xtile,  limited_ytile)}", lvl=4)
     return (xtile, limited_ytile)
 
 
@@ -131,9 +135,9 @@ def tile2pixel(xy, zoom, tile_range):
     """Convert Z/X/Y tile to map's X-Y coordinates"""
     # That's all, no complex math involved. Rendering bug might be somewhere else.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
-    print(xy, zoom, tile_range)
+    print2("Tile2Pixel input:", xy, zoom, tile_range, lvl=3)
     # If it still doesn't work, replace "- tile_offset" with "+ tile_offset"
-    print((xy[0] - xmin - tile_offset[0]), (xy[1] - ymin - tile_offset[1]))
+    print2("output:",(xy[0] - xmin - tile_offset[0]), (xy[1] - ymin - tile_offset[1]), lvl=3)
     if zoom < 3:
         # I don't know how to fix low-zoom offset error, but this might help
         # Miscalculation is caused due to tile range (5 tiles) being larger
@@ -173,7 +177,37 @@ def check_rate_limit(user, extra=0):
     # Extra is useful in case when user queries lot of elements in one query.
     command_history[user].add(tnow + extra)
     command_history[user] = set(filter(lambda x: x > tnow - config["rate_limit"]["time_period"], command_history[user]))
-    # print(user, command_history[user])
+    print2(user, command_history[user], lvl=6)
     if len(command_history[user]) > config["rate_limit"]["max_calls"]:
         return False
     return True
+    
+
+def print2(*args, **kwargs):
+    # https://stackoverflow.com/questions/24438976
+    """
+    Special wrapper for printing with debug capability.
+    
+    Adds file and line number information to beginning of every print statement.
+    In a way basically similar to verbose logging solutions, config["debug_level"]
+    is now used to optionally hide some debugging messages from console without commenting.
+    """
+    caller = getframeinfo(stack()[1][0])
+    if "lvl" in kwargs and type(kwargs["lvl"]) == int:
+    	kwargs["level"] = kwargs["lvl"]
+    	kwargs.pop("lvl")
+    if not ("level" in kwargs and type(kwargs["level"]) == int):
+    	kwargs["level"] = 0
+    if kwargs["level"] > config["debug_level"]:
+        return
+    if config["debug_level"] >= 7:
+        c=-1
+        for ln in stack()[1:]:
+            c+=1
+            caller2=getframeinfo(ln[0])
+            print(" "*c, c, f"{caller2.filename}:{caller2.lineno} in {caller2.function}")
+    kwargs.pop("level")
+    print(f"{caller.filename}:{caller.lineno} - ", end="")
+    print(*args, **kwargs)
+
+

@@ -386,9 +386,9 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
 def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = utils.deg2tile_float(lat_deg, lon_deg, zoom)
-    print("Center X/Y:", center_x, center_y)
+    utils.print("Center X/Y:", center_x, center_y, lvl=3)
     xmin, xmax = int(center_x - config["rendering"]["tiles_x"] / 2), int(center_x + config["rendering"]["tiles_x"] / 2)
-    print("X min/max:", xmin, xmax)
+    utils.print("X min/max:", xmin, xmax, lvl=3)
     n = 2 ** zoom  # N is number of tiles in one direction on zoom level
     if config["rendering"]["tiles_x"] % 2 == 0:
         xmax -= 1
@@ -403,8 +403,8 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     # tile_offset - By how many tiles should tile grid shifted somewhere (up left?).
     # Constant offset: if map is odd number of tiles wide,
     #  offset will be increased by half of a tile.
-    print("Tile offset calculation")
-    print(
+    utils.print("Tile offset calculation", lvl=4)
+    utils.print(
         "center_x:",
         center_x,
         "\nConstant X offset:",
@@ -415,14 +415,14 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
         (config["rendering"]["tiles_x"] % 2) / 2,
         "\nCenter_X + constant offset:",
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2),
-    )
+    	lvl=4)
     tile_offset = (
         (center_x + (config["rendering"]["tiles_x"] % 2) / 2) % 1,
         (center_y + (config["rendering"]["tiles_y"] % 2) / 2) % 1,
     )
     # tile_offset = 0,0
-    print("Offset (X/Y, Lon/Lat):", tile_offset)
-    print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}")
+    utils.print("Offset (X/Y, Lon/Lat):", tile_offset, lvl=2)
+    utils.print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
@@ -449,7 +449,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
     for note in notes:
         # TODO: Unify coordinate conversion functions.
         coord = utils.wgs2pixel(note, tile_range, frag)
-        # print(coord)
+        utils.print(coord, lvl=5)
         if note[2]:  # If note is closed
             note_icon = closed_note_icon
             icon_pos = (int(coord[0] - closed_note_icon_size[0] / 2), int(coord[1] - closed_note_icon_size[1]))
@@ -457,7 +457,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
             note_icon = open_note_icon
             icon_pos = (int(coord[0] - open_note_icon_size[0] / 2), int(coord[1] - open_note_icon_size[1]))
         # https://stackoverflow.com/questions/5324647
-        # print(icon_pos)
+        utils.print(icon_pos, lvl=5)
         Cluster.paste(note_icon, icon_pos, note_icon)
         del note_icon
     Cluster.save(filename)
