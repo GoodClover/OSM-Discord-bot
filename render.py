@@ -9,7 +9,7 @@
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 from io import BytesIO
 from typing import Optional
-from typing import Union
+from typing import Union, Tuple, List
 
 import requests
 from discord import Message
@@ -53,7 +53,7 @@ closed_note_icon_size = closed_note_icon.size
 class BaseElement:
     def __init__(self, elm_type, id, **kwargs):
         self.id = str(id)
-        self.type = elem_type
+        self.type = elm_type
         # Has this element been optimized into renderable form.
         self.resolved = False
         # Geomentry will be different from original. List of RenderSegment-s
@@ -74,6 +74,11 @@ class BaseElement:
         # Save result as RenderSegment
         self.resolved = True
         pass
+
+    def __repr__(self):
+        d = self.__dict__
+        return f"{d['type']}/{d['id']}\t" + str(d)
+
 
 
 class Note(BaseElement):
@@ -102,7 +107,7 @@ class User(BaseElement):
 
 
 class Element(BaseElement):
-    def __init__(self, elem_type, id):
+    def __init__(self, elm_type, id):
         super().__init__(elm_type, id)
 
     def resolve(self):
@@ -115,9 +120,10 @@ class Element(BaseElement):
 
 class RenderQueue:
     # Think of RenderQueue like temporary collection of elements, that will be featured on single image.
-    def __init__(self, *elements):
+    def __init__(self, status_log_func=print, *elements):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
         # Init does nothing but sets up variables and then starts adding elements to lists.
+        print(elements)
         # Status message that could be used while downloading elements. Not sure how that would work.
         self.status_text = ""
         # Discord message that will be optionaly passed when end user should be seeing bot activity.
@@ -135,10 +141,15 @@ class RenderQueue:
         self.elements = []
         # Resolved - has element IDs been converted into tags and geoetry?
         self.resolved = False
+        # Status logging function provides RenderQueue direct access to function needed to
+        # provide feedback to user. Default is regular print, but in discord it's following:
+        # lambda message: status_msg.edit(content=message)
+        self.status_log_func = status_log_func
         # Segments - array of geographic coordinates with defined or undefined colours.
         # Ready to be plotted on map. If all elements are converted to segments,
-        self.add(*elements)
-        return self
+        if elements:
+            self.add(*elements)
+        return
 
     def add(self, *elements):
         self.resolved = False
@@ -169,7 +180,7 @@ class RenderQueue:
                     element.resolve()
         self.resolved = True
 
-    def get_bounds(self, segments=True, notes=True) -> tuple[float, float, float, float]:
+    def get_bounds(self, segments=True, notes=True) -> Tuple[float, float, float, float]:
         # Finds bounding box of rendering queue (segments)
         # Rendering queue is bunch of coordinates that was calculated in previous function.
         if self.resolved:
@@ -211,7 +222,7 @@ class RenderQueue:
             max_lon += 10 ** (-precision)
         return (min_lat, max_lat, min_lon, max_lon)
 
-    def calc_preview_area(self) -> tuple[int, float, float]:
+    def calc_preview_area(self) -> Tuple[int, float, float]:
         # queue_bounds: tuple[float, float, float, float]
 
         # Input: tuple (min_lat, max_lat, min_lon, max_lon)
@@ -246,9 +257,11 @@ class RenderQueue:
         self.preview_area = (zoom, center_lat, center_lon)
         return (zoom, center_lat, center_lon)
 
-    def set_status(self, text):
+    def set_status(self, text: str):
+        # Type MUST be str
+        # Passes any text to logging function provided during queue creation.
         # In more advanced future this function will update actual status message in chat.
-        self.status_text = text
+        self.status_log_func(text)
 
 
 class RenderSegment:
@@ -268,7 +281,7 @@ class RenderSegment:
 
     # NB! This class is generated in X.resolve() command, meaning that slow operations are expected.
     def __init__(self, parent_elm, parent_queue, parent_segment=None, recursion_depth=0):
-        # parent_queue: RenderQueue
+        # parent_queue: RenderQueue   - Used for linking to discord status message.
         # parent_elm: BaseElement
         # parent_segment: Union[RenderSegment, None]
         self.parent_elm = parent_elm
@@ -356,7 +369,7 @@ class RenderSegment:
 """
 
 
-def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
+def reduce_segment_nodes(segments: List[List[Tuple[float, float]]]) -> List[List[Tuple[float, float]]]:
     # Relative simple way to reduce nodes by just picking every n-th node.
     # Ignores ways with less than 50 nodes.
     for seg_num in range(len(segments)):
@@ -383,7 +396,7 @@ def reduce_segment_nodes(segments: list[list[tuple[float, float]]]) -> list[list
     return reduced
 
 
-def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int, int, int, tuple[float, float]]:
+def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int, int, int, int, Tuple[float, float]]:
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = utils.deg2tile_float(lat_deg, lon_deg, zoom)
     utils.print("Center X/Y:", center_x, center_y, lvl=3)
@@ -429,13 +442,13 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
-def draw_line(segment: list[tuple[float, float]], draw, colour="red") -> None:
+def draw_line(segment: List[Tuple[float, float]], draw, colour="red") -> None:
     # https://stackoverflow.com/questions/59060887
     # This is polyline of all coordinates on array.
     draw.line(segment, fill=colour, width=4)
 
 
-def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
+def draw_node(coord: Tuple[float, float], draw, colour="red") -> None:
     # https://stackoverflow.com/questions/2980366
     r = 5
     x, y = coord
@@ -445,7 +458,7 @@ def draw_node(coord: tuple[float, float], draw, colour="red") -> None:
     draw.ellipse(twoPointList, fill=colour)
 
 
-def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], frag: tuple[int, float, float], filename):
+def render_notes_on_cluster(Cluster, notes: List[Tuple[float, float, bool]], frag: Tuple[int, float, float], filename):
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     tile_range = get_image_tile_range(frag[1], frag[2], frag[0])
     errorlog = []
@@ -467,7 +480,7 @@ def render_notes_on_cluster(Cluster, notes: list[tuple[float, float, bool]], fra
     return Cluster, filename
 
 
-def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]], frag: tuple[int, float, float]):
+def render_elms_on_cluster(Cluster, render_queue: List[List[Tuple[float, float]]], frag: Tuple[int, float, float]):
     # Inputs:   Cluster - PIL image
     #           render_queue - [[(lat, lon), ...], ...]
     #           frag  - zoom, lat, lon used  for cluster rendering input.
@@ -514,7 +527,7 @@ def render_elms_on_cluster(Cluster, render_queue: list[list[tuple[float, float]]
     # I barely know how to draw lines in PIL
 
 
-def merge_segments(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
+def merge_segments(segments: List[List[Tuple[float, float]]]) -> List[List[Tuple[float, float]]]:
     # Other bug occurs in case some ways of relation are reversed.
     # Ideally, this should merge two segments, if they share same end and beginning node.
     # Merges some ways together. For russia, around 4000 ways became 34 segments.
@@ -652,8 +665,8 @@ async def elms_to_render(
 
 
 def get_render_queue_bounds(
-    segments: list[list[tuple[float, float]]], notes: list[tuple[float, float, bool]] = []
-) -> tuple[float, float, float, float]:
+    segments: List[List[Tuple[float, float]]], notes: List[Tuple[float, float, bool]] = []
+) -> Tuple[float, float, float, float]:
     # Finds bounding box of rendering queue (segments)
     # Rendering queue is bunch of coordinates that was calculated in previous function.
     min_lat, max_lat, min_lon, max_lon = 90.0, -90.0, 180.0, -180.0
