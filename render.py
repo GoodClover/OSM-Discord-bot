@@ -9,7 +9,9 @@
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 from io import BytesIO
 from typing import Optional
-from typing import Union, Tuple, List
+from typing import Union
+from typing import Tuple
+from typing import List
 
 import requests
 from discord import Message
@@ -50,7 +52,7 @@ closed_note_icon_size = closed_note_icon.size
 # Covering element instance lifecycle from download to uploading to chat.
 
 
-class BaseElement:
+class _BaseElement:
     def __init__(self, elm_type, id, **kwargs):
         self.id = str(id)
         self.type = elm_type
@@ -81,7 +83,7 @@ class BaseElement:
 
 
 
-class Note(BaseElement):
+class Note(_BaseElement):
     def __init__(self, id):
         super().__init__("note", id)
 
@@ -89,7 +91,7 @@ class Note(BaseElement):
         super().resolve()
 
 
-class Changeset(BaseElement):
+class Changeset(_BaseElement):
     def __init__(self, id, get_discussion: bool = False):
         super().__init__("changeset", id, dicussion=get_discussion)
 
@@ -97,7 +99,7 @@ class Changeset(BaseElement):
         super().resolve()
 
 
-class User(BaseElement):
+class User(_BaseElement):
     def __init__(self, username):
         super().__init__("user", network.get_id_from_username(username))
         self.name = str(username)
@@ -106,7 +108,7 @@ class User(BaseElement):
         super().resolve()
 
 
-class Element(BaseElement):
+class Element(_BaseElement):
     def __init__(self, elm_type, id):
         super().__init__(elm_type, id)
 
@@ -279,10 +281,11 @@ class RenderSegment:
     # returns that way only without geographical coordinates data and we would need
     # extra queries to get coordinates and tags of all nodes involved.
 
-    # NB! This class is generated in X.resolve() command, meaning that slow operations are expected.
-    def __init__(self, parent_elm, parent_queue, parent_segment=None, recursion_depth=0):
+    # NB! Instances of this class are generated from _BaseElement.resolve() command,
+    # called by RenderQueue.resolve(). This means that slow operations are expected.
+    def __init__(self, parent_elm, parent_queue: RenderQueue, parent_segment=None, recursion_depth=0):
         # parent_queue: RenderQueue   - Used for linking to discord status message.
-        # parent_elm: BaseElement
+        # parent_elm: _BaseElement
         # parent_segment: Union[RenderSegment, None]
         self.parent_elm = parent_elm
         self.parent_segment = parent_segment
@@ -436,9 +439,7 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int
     )
     # tile_offset = 0,0
     utils.print("Offset (X/Y, Lon/Lat):", tile_offset, lvl=2)
-    utils.print(
-        f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3
-    )
+    utils.print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3)
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
