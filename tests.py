@@ -36,6 +36,17 @@ def test_6():
     assert config["rendering"]["max_note_zoom"] <= config["rendering"]["max_zoom"]
 
 
+def test_7():
+    # Tries to generate rendering objects
+    x=render.RenderQueue()
+    x.add("node", 2)  # Observatory in Russia
+    x.add("node", 946092520)  # Museum of the observatory
+    x.add("way", 78502673)  # Footway near observatory
+    x.add("relation", 9523716)  # Observatory building
+    x.resolve()
+    return x
+
+
 test_1()
 test_2()
 test_3()

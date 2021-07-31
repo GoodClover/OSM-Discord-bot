@@ -13,6 +13,7 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
+import overpy
 import requests
 from discord import Message
 from PIL import Image
@@ -40,6 +41,8 @@ else:
 
 open_note_icon_size = open_note_icon.size
 closed_note_icon_size = closed_note_icon.size
+LOADING_EMOJI = config["emoji"]["loading"]  # :loading:
+overpass_api = overpy.Overpass(url=config["overpass_url"])
 
 
 # Rendering system may need a rewrite which focuses on object-oriented approach.
@@ -53,7 +56,7 @@ closed_note_icon_size = closed_note_icon.size
 
 
 class _BaseElement:
-    def __init__(self, elm_type, id, **kwargs):
+    def __init__(self, elm_type, id, parent_queue, **kwargs):
         self.id = str(id)
         self.type = elm_type
         # Has this element been optimized into renderable form.
@@ -68,6 +71,8 @@ class _BaseElement:
         # Actually that's pretty much self.type
         self.rendertype = None
         self.colour = None  # Use default colour palette
+        # Parent queue is RenderQueue and it's only purpose is to be passed to RenderSegment
+        self.parent_queue = parent_queue
         self.elm = network.get_elm(elm_type, id, "dicussion" in kwargs and kwargs["dicussion"])
 
     def resolve(self):
@@ -77,30 +82,34 @@ class _BaseElement:
         self.resolved = True
         pass
 
-    def __repr__(self):
+    def __str__(self):
         d = self.__dict__
         return f"{d['type']}/{d['id']}\t" + str(d)
 
+    def __repr__(self):
+        d = self.__dict__
+        return f"_BaseElement('{d['type']}', {d['id']})"
+
 
 class Note(_BaseElement):
-    def __init__(self, id):
-        super().__init__("note", id)
+    def __init__(self, id, parent_queue):
+        super().__init__("note", id, parent_queue)
 
     def resolve(self):
         super().resolve()
 
 
 class Changeset(_BaseElement):
-    def __init__(self, id, get_discussion: bool = False):
-        super().__init__("changeset", id, dicussion=get_discussion)
+    def __init__(self, id, parent_queue, get_discussion: bool = False):
+        super().__init__("changeset", id, parent_queue, dicussion=get_discussion)
 
     def resolve(self):
         super().resolve()
 
 
 class User(_BaseElement):
-    def __init__(self, username):
-        super().__init__("user", network.get_id_from_username(username))
+    def __init__(self, username, parent_queue):
+        super().__init__("user", network.get_id_from_username(username), parent_queue)
         self.name = str(username)
 
     def resolve(self):
@@ -108,12 +117,12 @@ class User(_BaseElement):
 
 
 class Element(_BaseElement):
-    def __init__(self, elm_type, id):
-        super().__init__(elm_type, id)
+    def __init__(self, elm_type, id, parent_queue):
+        super().__init__(elm_type, id, parent_queue)
 
     def resolve(self):
         super().resolve()
-        self.geometry = RenderSegment(self)
+        self.geometry = RenderSegment(self, self.parent_queue)
 
 
 # The point is that it's not feasible to maintain every node-way-relation of every element, because they will grow large; therefore they need to be optimized into something simpler... I have hit multiple walls again.
@@ -121,7 +130,7 @@ class Element(_BaseElement):
 
 class RenderQueue:
     # Think of RenderQueue like temporary collection of elements, that will be featured on single image.
-    def __init__(self, status_log_func=print, *elements):
+    def __init__(self, *elements, status_log_func=print):
         # elements is list of tuples (elm_type: str, ID: int|str) to be processed.
         # Init does nothing but sets up variables and then starts adding elements to lists.
         print(elements)
@@ -154,19 +163,19 @@ class RenderQueue:
 
     def add(self, *elements):
         self.resolved = False
-        # First if handles cases like add("note", 1)
+        # First if handles cases of single element like add("note", 1)
         if len(elements) == 2 and type(elements[0]) == str and (type(elements[1]) == int or type(elements[1]) == str):
             elements = [elements]
         # Normal input should be add(("note", 1), ("way", 2))
         for element in elements:
             if element[0].lower() == "note" or element[0].lower() == "notes":
-                self.notes.append(Note(element[1]))
+                self.notes.append(Note(element[1], self))
             elif element[0].lower() == "changeset":
-                self.changesets.append(Changeset(element[1]))
+                self.changesets.append(Changeset(element[1], self))
             elif element[0].lower() == "user":
-                self.users.append(User(element[1]))
+                self.users.append(User(element[1], self))
             else:
-                self.elements.append(Element(element[0], element[1]))
+                self.elements.append(Element(element[0], element[1], self))
 
     def resolve(self):
         # Queries elements to resolve geometry.
@@ -267,6 +276,7 @@ class RenderQueue:
 
 class RenderSegment:
     # Render segment is essentialy everything that can have coordinates (and tags).
+    # Correction: currently it's called only for elements (N/W/R).
     # Top level RenderSegment is member of RenderQueue and acts as single OSM element.
     # RenderSegment's primary function is to act as generator for drawing elements
     # onto map. Think of abstractation where you init RenderSegment by saying "I want
@@ -280,7 +290,9 @@ class RenderSegment:
     # returns that way only without geographical coordinates data and we would need
     # extra queries to get coordinates and tags of all nodes involved.
 
-    # NB! Instances of this class are generated from _BaseElement.resolve() command,
+    # Wait. Maybe renderSeqment is only for drawing information and querying is handled elsewhere?
+
+    # NB! Instances of this class are generated from Element.resolve() command,
     # called by RenderQueue.resolve(). This means that slow operations are expected.
     def __init__(self, parent_elm, parent_queue: RenderQueue, parent_segment=None, recursion_depth=0):
         # parent_queue: RenderQueue   - Used for linking to discord status message.
@@ -292,12 +304,13 @@ class RenderSegment:
         self.subsegments = []
         # This is used for ways of the element. Infividual elements are single-node segments.
         self.segments = []
+        
         if parent_elm.type == "relation":
             output_type = "body"  # Original version
             if 1 < recursion_depth:
                 output_type = "center"  # Alternative: "bb"
-            Q = "[out:json][timeout:45];relation(id:" + str(elem_id) + ");(._;>;);out " + output_type + ";"
-        if parent_elm.type == "way":
+            Q = "[out:json][timeout:45];"+parent_elm.type+"(id:" + str(elem_id) + ");(._;>;);out " + output_type + ";"
+        if parent_elm.type == "way" or parent_elm.type == "node":
             Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");(._;>;);out body;"
         parent_queue.set_status(f"{LOADING_EMOJI} Querying `" + Q + "`")
         # Above line may introduce error when running it from /element, not on_message.
