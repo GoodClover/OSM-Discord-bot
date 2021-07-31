@@ -8,10 +8,10 @@
 # tile_margin_x / tile_margin_y - How much free space is left at edges
 # Colours need to be reworked for something prettier, therefore don't relocate them yet.
 from io import BytesIO
-from typing import Optional
-from typing import Union
-from typing import Tuple
 from typing import List
+from typing import Optional
+from typing import Tuple
+from typing import Union
 
 import requests
 from discord import Message
@@ -80,7 +80,6 @@ class _BaseElement:
     def __repr__(self):
         d = self.__dict__
         return f"{d['type']}/{d['id']}\t" + str(d)
-
 
 
 class Note(_BaseElement):
@@ -439,7 +438,9 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int
     )
     # tile_offset = 0,0
     utils.print("Offset (X/Y, Lon/Lat):", tile_offset, lvl=2)
-    utils.print(f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3)
+    utils.print(
+        f"get_image_tile_range{(lat_deg, lon_deg, zoom)} -> {(xmin, xmax - 1, ymin, ymax - 1, tile_offset)}", lvl=3
+    )
     return xmin, xmax - 1, ymin, ymax - 1, tile_offset
 
 
