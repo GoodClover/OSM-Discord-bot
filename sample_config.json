@@ -27,8 +27,8 @@
         "tag": "https://wiki.openstreetmap.org/w/images/thumb/5/5f/Osm_element_tag.svg/256px-Osm_element_tag.svg.png",
         "value": "https://wiki.openstreetmap.org/w/images/thumb/f/fd/Osm_element_value.svg/256px-Osm_element_value.svg.png",
         "user": "https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/master/app/assets/images/avatar_large.png",
-        "note_open": "res/img/Open_note_marker.png",
-        "note_solved": "res/img/Closed_note_marker.png"
+        "note_open": "https://wiki.openstreetmap.org/w/images/d/d0/Open_note_marker.png",
+        "note_solved": "https://wiki.openstreetmap.org/w/images/6/6a/Closed_note_marker.png"
     },
     "emoji": {
         "github": "<:github:857627201510834176>",
@@ -85,19 +85,19 @@
             "Accept-Charset": "utf-8",
             "Accept-Encoding": "none",
             "Accept-Language": "en-GB,en",
-            "Connection": "keep-alive",
+            "Connection": "keep-alive"
         },
         "colour_names_json_url": "https://raw.githubusercontent.com/bahamas10/css-color-names/master/css-color-names.json",
-        "RAL_url": "https://raw.githubusercontent.com/smaddy/ral-json/main/ral_pretty.json"
+        "RAL_url": "https://raw.githubusercontent.com/smaddy/ral-json/main/ral_pretty.json",
         "limiter_offset": 50,
         "reduction_factor": 2
     },
     "rate_limit": {
-        "time_period": 30
-        "max_calls": 10
-        "max_elements": 10
-        "element_count_exp": "This field is calculated within script (ln 105)."
-        "rate_extra_exp": 1.8
+        "time_period": 30,
+        "max_calls": 10,
+        "max_elements": 10,
+        "element_count_exp": "This field is calculated within script (ln 105).",
+        "rate_extra_exp": 1.8,
         "rendering_rate_exp": 0.8
     }
 }
