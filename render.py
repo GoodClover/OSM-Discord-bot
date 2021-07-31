@@ -302,20 +302,18 @@ class RenderSegment:
         self.parent_segment = parent_segment
         # If this element is a relation and it has subrelations, then other relations are stored into subsegments and RenderSegments
         self.subsegments = []
-        # This is used for ways of the element. Infividual elements are single-node segments.
+        # This is used for ways of the element. Infividual nodes are single-node segments.
+        # Uses same typing as old rendering module (that's: [(Lat1,Lon1), (Lat2, Lon2)])... i hope
         self.segments = []
         
-        if parent_elm.type == "relation":
-            output_type = "body"  # Original version
-            if 1 < recursion_depth:
-                output_type = "center"  # Alternative: "bb"
-            Q = "[out:json][timeout:45];"+parent_elm.type+"(id:" + str(elem_id) + ");(._;>;);out " + output_type + ";"
-        if parent_elm.type == "way" or parent_elm.type == "node":
-            Q = "[out:json][timeout:45];" + elem_type + "(id:" + str(elem_id) + ");(._;>;);out body;"
+        output_type = "body"  # Original version
+        if parent_elm.type == "relation" and 1 < recursion_depth:
+            output_type = "center"  # Alternative: "bb"
+        Q = "[out:json][timeout:45];"+parent_elm.type+"(id:" + str(parent_elm.id) + ");(._;>;);out " + output_type + ";"
         parent_queue.set_status(f"{LOADING_EMOJI} Querying `" + Q + "`")
         # Above line may introduce error when running it from /element, not on_message.
         result = overpass_api.query(Q)
-        self.tags = result.something.tags
+        self.tags = eval("result."+parent_elm.type+"s[0].tags")
 
     def reduce(self):
         # See  def reduce_segment_nodes(segments
