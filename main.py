@@ -1453,7 +1453,7 @@ async def close_suggestion_command(ctx: SlashContext, msg_id: int, result: str) 
 help_embeds: list[Embed] = []
 
 # region HELP
-with open("HELP.md", "r") as file:
+with open("HELP.md", "r", encoding="utf8") as file:
     for page in file.read().split("\n# "):
         title, image, body = page.split("\n", 2)
         title = title.removeprefix("# ")  # split() doesn't remove it for the first one.
