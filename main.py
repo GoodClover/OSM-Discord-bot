@@ -47,6 +47,8 @@ SS = r"(?<!\/|\w)"  # Safe Start
 SE = r"(?!\/|\w)"  # Safe End
 DECIMAL = r"[+-]?(?:[0-9]*\.)?[0-9]+"
 POS_INT = r"[0-9]+"
+# Discord message link
+DISC_MSG_LINK_REGEX = r"(?:https?:)?\/\/(?:\w+\.)?discord\.com\/channels\/([0-9]+)\/([0-9]+)\/([0-9]+)\/?"
 ### Inline linking ###
 ELM_INLINE_REGEX = rf"{SS}(node|way|relation)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
 CHANGESET_INLINE_REGEX = rf"{SS}(changeset)(s? |\/)({POS_INT}(?:(?:, | and | or | )(?:{POS_INT}))*){SE}"
@@ -110,6 +112,7 @@ config: dict[str, Any] = {}
 guild_ids: list[int] = []
 load_config()
 
+DISC_MSG_LINK_REGEX = re.compile(DISC_MSG_LINK_REGEX, re.IGNORECASE)
 ELM_INLINE_REGEX = re.compile(ELM_INLINE_REGEX, re.IGNORECASE)
 CHANGESET_INLINE_REGEX = re.compile(CHANGESET_INLINE_REGEX, re.IGNORECASE)
 NOTE_INLINE_REGEX = re.compile(NOTE_INLINE_REGEX, re.IGNORECASE)
@@ -1681,6 +1684,41 @@ async def on_message(msg: Message) -> None:
     if "use potlatch" in msg.clean_content.lower():
         await msg.add_reaction("🚨")
         await msg.add_reaction(config["emoji"]["potlatch"])
+
+    #### Message link → quoted ####
+    for guild_id, chan_id, qmsg_id in DISC_MSG_LINK_REGEX.findall(msg.clean_content):
+        try:
+            guild_id, chan_id, qmsg_id = int(guild_id), int(chan_id), int(qmsg_id)
+        except ValueError:  # Not an int
+            continue
+        if guild_id != msg.guild.id:  # Not the current server
+            continue
+
+        chan: discord.TextChannel = msg.guild.get_channel(chan_id)
+        if chan is None:
+            await msg.reply("Channel not found.", delete_after=6)
+            continue
+
+        try:
+            qmsg: Message = await chan.fetch_message(qmsg_id)
+        except discord.errors.NotFound:
+            await msg.reply("Message not found.", delete_after=6)
+            continue
+        except discord.errors.Forbidden:
+            await msg.reply("Sorry, but I'm forbidden from accessing that message.", delete_after=6)
+            continue
+
+        # TODO: Should we copy quoted message images?
+        if qmsg.clean_content.strip() == "":  # Avoid quoting image-only messages.
+            await msg.reply("Not quoting empty message.", delete_after=6)
+            continue
+
+        await msg.reply(
+            content="> "
+            + qmsg.clean_content.replace("\n", "\n> ")
+            + f"\n-<@!{qmsg.author.id}>, {date_to_mention(qmsg.created_at)}",
+            allowed_mentions=AllowedMentions.none(),
+        )
 
     #### Inline linking ####
     # Find matches
