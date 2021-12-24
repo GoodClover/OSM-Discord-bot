@@ -513,8 +513,6 @@ def elm_embed(elm: dict, extras: Iterable[str] = []) -> Embed:
         # Note: https://aleung.github.io/osm-visual-history is basically identical, but has some minor fixes missing.
         # I'm using "Visual History" as the name, despite linking to deep history, as it decribes it's function better.
         f"[Visual History](<https://osmlab.github.io/osm-deep-history/#/{elm['type']}/{elm['id']}>)"
-        " • "
-        f"[Mapki/Deep Diff](<http://osm.mapki.com/history/{elm['type']}.php?id={elm['id']}>)"
     )
 
     # ? Maybe make it read `colour=` tags for some extra pop?
