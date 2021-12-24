@@ -1919,7 +1919,7 @@ async def suggest_command(ctx: SlashContext, suggestion: str) -> None:
 
     sugg_msg = await suggestion_chanel.send(
         f"""
-__**New suggestion posted**__
+__**New suggestion posted**__ <@&{config['server_settings'][str(ctx.guild.id)]['suggestion_role']}>
 By: <@!{ctx.author.id}>, {date_to_mention(datetime.now())}
 > {suggestion}
 

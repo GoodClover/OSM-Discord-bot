@@ -55,6 +55,7 @@
         "413070382636072960": {
             "__name": "OpenStreetMap World",
             "suggestion_channel": 821120147522584576,
+            "suggestion_role": 880859930410774559,
             "power_role": 748826231692066850,
             "mappers_count_channel": 578578746244726794,
             "suggestions_enabled": false
