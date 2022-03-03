@@ -5,6 +5,14 @@
 
 ![The bot in action, showing an embed for node 1](res/img/example_node_embed.png)
 
+## **Maintainance mode**
+
+The code is messy, the libraries this bot uses have been deprecated.
+Minor changes and bug-fixes will still be made.
+
+If you come here with the goal of updating it, you might be better using [test 9's fork](<https://github.com/kallejre/OSM-Discord-bot>), with improved code organisation.
+You probabbly want [interactions-py](<https://github.com/interactions-py/library>), the successor to what the current code uses.
+
 ## Features
 
 For a full list of commands see [COMMANDS.md](COMMANDS.md), running `/help` will give you an interactive help system.
