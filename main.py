@@ -58,10 +58,10 @@ USER_INLINE_REGEX = rf"{SS}user\/[\w\-_]+{SE}"
 MAP_FRAGMENT_INLINE_REGEX = rf"{SS}#map={POS_INT}\/{DECIMAL}\/{DECIMAL}{SE}"
 MAP_FRAGEMT_CAPTURING_REGEX = rf"#map=({POS_INT})\/({DECIMAL})\/({DECIMAL})"
 
-# This global set contains filename similar to /googlebad. If on_message fails, it will remove cached files on next run.
+# This global set contains filename similar to /fate. If on_message fails, it will remove cached files on next run.
 cached_files: set = set()
 # Set of unix timestamps.
-recent_googles: set = set()
+recent_fates: set = set()
 command_history: dict = dict()  # Global per-user dictionary of sets to keep track of rate-limiting per-user.
 
 ### Rendering ###
@@ -238,18 +238,18 @@ async def on_ready() -> None:
 
 
 # I got annoyed by people using googlebad so often, so i implemented an easter egg.
-# Google Bad
-@slash.slash(name="googlebad", description="Find your fate of using Google Maps.", guild_ids=guild_ids)  # type: ignore
-async def googlebad_command(ctx: SlashContext) -> None:
-    global recent_googles
+# Fate (formerly Google Bad)
+@slash.slash(name="fate", description="Mailing lists fall silent… the nodes are uneasy…", guild_ids=guild_ids)  # type: ignore
+async def fate_command(ctx: SlashContext) -> None:
+    global recent_fates
     time_now = time.time()
-    recent_googles = set(filter(lambda x: x > time_now - 60, recent_googles)).union({time_now})
-    if len(recent_googles) > 4 and random.random() > 0.7:
-        # Alternative output is triggered at 30% chance after 5 /googlebads are used in 1 minute.
-        recent_googles = set()
-        await ctx.send(random.choice(ohnos).replace("…", "Whenever you use `/googlebad`,"))
+    recent_fates = set(filter(lambda x: x > time_now - 60, recent_fates)).union({time_now})
+    if len(recent_fates) > 4 and random.random() > 0.7:
+        # Alternative output is triggered at 30% chance after 5 /fates are used in 1 minute.
+        recent_fates = set()
+        await ctx.send(random.choice(ohnos).replace("…", "Due to overuse of `/fate`,"))
     else:
-        await ctx.send(random.choice(ohnos).replace("…", "Whenever you mention Google Maps,"))
+        await ctx.send(random.choice(ohnos))
 
 
 # JOSM Tip
