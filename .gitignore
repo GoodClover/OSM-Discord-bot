@@ -1,5 +1,4 @@
 .env
-config.json
 config_backup.json
 .mypy_cache/
 __pycache__/
