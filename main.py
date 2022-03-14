@@ -1087,12 +1087,12 @@ def deg2tile(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
 
 def tile2deg(zoom: int, x: int, y: int) -> tuple[float, float]:
     """Get top-left coordinate of a tile."""
-    lat_rad = math.pi - 2 * math.pi * y / (2 ** zoom)
+    lat_rad = math.pi - 2 * math.pi * y / (2**zoom)
     lat_rad = 2 * math.atan(math.exp(lat_rad)) - math.pi / 2
     lat = lat_rad * 180 / math.pi
     # Handling latitude out of range is not necessary
     # longitude maps linearly to map, so we simply scale:
-    lng = -180 + (360 * x / (2 ** zoom) % 360)
+    lng = -180 + (360 * x / (2**zoom) % 360)
     return (lat, lng)
 
 
@@ -1101,7 +1101,7 @@ def deg2tile_float(lat_deg: float, lon_deg: float, zoom: int) -> tuple[float, fl
     # By removing rounding down from deg2tile function, we can estimate
     # position where to draw coordinates during element export.
     lat_rad = math.radians(lat_deg)
-    n = 2 ** zoom
+    n = 2**zoom
     xtile = (lon_deg + 180.0) / 360 * n
     # Sets safety bounds on vertical tile range.
     if lat_deg >= 89:
@@ -1387,7 +1387,7 @@ def get_image_tile_range(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int
     # Following line is duplicataed at calc_preview_area()
     center_x, center_y = deg2tile_float(lat_deg, lon_deg, zoom)
     xmin, xmax = int(center_x - tiles_x / 2), int(center_x + tiles_x / 2)
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    n = 2**zoom  # N is number of tiles in one direction on zoom level
     if tiles_x % 2 == 0:
         xmax -= 1
     ymin, ymax = int(center_y - tiles_y / 2), int(center_y + tiles_y / 2)
@@ -1434,7 +1434,7 @@ async def get_image_cluster(
 ) -> tuple[Any, str, list[tuple[str, str, Exception]]]:
     # Rewrite of https://github.com/ForgottenHero/mr-maps
     # Following line is duplicataed at calc_preview_area()
-    n: int = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    n: int = 2**zoom  # N is number of tiles in one direction on zoom level
 
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     # xmin, xmax, ymin, ymax, tile_offset
@@ -1500,7 +1500,7 @@ def wgs2pixel(
     """Convert geographical coordinates to X-Y coordinates to be used on map."""
     # Tile range is calculated in get_image_tile_range
     zoom, lat_deg, lon_deg = frag
-    n = 2 ** zoom  # N is number of tiles in one direction on zoom level
+    n = 2**zoom  # N is number of tiles in one direction on zoom level
     # tile_offset - By how many tiles should tile grid shifted somewhere.
     xmin, xmax, ymin, ymax, tile_offset = tile_range
     coord = deg2tile_float(xy[0], xy[1], zoom)
@@ -1763,9 +1763,9 @@ async def on_message(msg: Message) -> None:
     wait_for_user_end = time.time()
     render_queue: list[list[tuple[float, float]]] = []
     # User quota is checked after they confirmed element lookup.
-    for i in range(int(queried_elements_count ** element_count_exp) + 1):
+    for i in range(int(queried_elements_count**element_count_exp) + 1):
         # Allows querying up to 10 elements at same time, delayed for up to 130 sec
-        rating = check_rate_limit(author_id, round(i ** rate_extra_exp, 2))
+        rating = check_rate_limit(author_id, round(i**rate_extra_exp, 2))
         # if not rating:
         #     return
     async with msg.channel.typing():
